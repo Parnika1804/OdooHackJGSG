@@ -26,6 +26,7 @@ export const STATUS_TONES = {
   // Drivers / generic
   Active: "success",
   Inactive: "neutral",
+  "Off Duty": "signal",
   Suspended: "alert",
 };
 

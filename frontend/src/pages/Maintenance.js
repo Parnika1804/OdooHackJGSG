@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { Wrench, CheckCircle2, ArrowRight } from "lucide-react";
 import { API_URL } from "../config";
 import { canManage } from "../permissions";
-
-const statusStyles = {
-  "In Shop": "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  Completed: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-};
+import { useToast } from "../components/ui/Toast";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import Table from "../components/ui/Table";
+import Alert from "../components/ui/Alert";
+import { StatusBadge } from "../components/ui/Badge";
+import { TextField, SelectField } from "../components/ui/FormField";
 
 const emptyForm = {
   vehicleId: "",
@@ -18,6 +21,7 @@ const emptyForm = {
 export default function Maintenance() {
   const role = localStorage.getItem("role");
   const canManageMaintenance = canManage("maintenance", role);
+  const { showToast } = useToast();
 
   const [logs, setLogs] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -29,7 +33,6 @@ export default function Maintenance() {
   const [submitting, setSubmitting] = useState(false);
 
   const [closingId, setClosingId] = useState(null);
-  const [rowError, setRowError] = useState({});
 
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -54,6 +57,7 @@ export default function Maintenance() {
 
   useEffect(() => {
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const vehicleById = (id) => vehicles.find((v) => v.id === id);
@@ -89,6 +93,7 @@ export default function Maintenance() {
         authHeaders()
       );
       resetForm();
+      showToast("Service record logged");
       fetchAll();
     } catch (err) {
       setFormError(err.response?.data?.detail || "Failed to log service record");
@@ -99,62 +104,102 @@ export default function Maintenance() {
 
   const handleClose = async (logId) => {
     setClosingId(logId);
-    setRowError((prev) => ({ ...prev, [logId]: "" }));
     try {
       await axios.put(
         `${API_URL}/maintenance/${logId}`,
         { status: "Completed" },
         authHeaders()
       );
+      showToast("Service log closed — vehicle back to Available");
       fetchAll();
     } catch (err) {
-      setRowError((prev) => ({
-        ...prev,
-        [logId]: err.response?.data?.detail || "Failed to close maintenance log",
-      }));
+      showToast(err.response?.data?.detail || "Failed to close maintenance log", "error");
     } finally {
       setClosingId(null);
     }
   };
 
+  const columns = [
+    {
+      key: "vehicle_id",
+      label: "Vehicle",
+      render: (log) => {
+        const vehicle = vehicleById(log.vehicle_id);
+        return vehicle ? vehicle.name : `#${log.vehicle_id}`;
+      },
+    },
+    { key: "service_type", label: "Service Type" },
+    {
+      key: "cost",
+      label: "Cost",
+      numeric: true,
+      render: (log) => `₹${Number(log.cost).toLocaleString()}`,
+    },
+    { key: "service_date", label: "Date", numeric: true },
+    {
+      key: "status",
+      label: "Status",
+      render: (log) => <StatusBadge status={log.status} />,
+    },
+  ];
+
+  if (canManageMaintenance) {
+    columns.push({
+      key: "actions",
+      label: "",
+      align: "right",
+      render: (log) =>
+        log.status === "In Shop" ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={CheckCircle2}
+            loading={closingId === log.id}
+            onClick={() => handleClose(log.id)}
+          >
+            Close
+          </Button>
+        ) : null,
+    });
+  }
+
   return (
-    <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
-      <h1 className="text-xl font-bold mb-1">Maintenance</h1>
-      <p className="text-xs text-gray-400 dark:text-neutral-600 mb-5">
-        Live maintenance data from the API.
-      </p>
+    <div className="p-6">
+      <div className="mb-5">
+        <h1 className="font-display text-xl font-bold text-ink-900 dark:text-paper-50">
+          Maintenance
+        </h1>
+        <p className="text-sm text-ink-400 mt-0.5">
+          {logs.length} service record{logs.length === 1 ? "" : "s"} on file
+        </p>
+      </div>
 
-      {loadError && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-4">
-          {loadError}
-        </div>
-      )}
+      <Alert variant="error">{loadError}</Alert>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_1fr] gap-6 items-start">
         {/* Log Service Record form */}
-        <div>
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-3">
-            LOG SERVICE RECORD
+        <Card>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wide mb-4">
+            <Wrench size={15} />
+            Log Service Record
           </h2>
 
           {!canManageMaintenance && (
-            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm px-3 py-2 rounded mb-3">
-              Your role has view-only access to Maintenance. Only Fleet Manager can log or close service records.
-            </div>
+            <Alert variant="info">
+              Your role has view-only access to Maintenance. Only Fleet Manager can log or close
+              service records.
+            </Alert>
           )}
+          <Alert variant="error">{formError}</Alert>
 
-          {formError && (
-            <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-              {formError}
-            </div>
-          )}
-
-          <form onSubmit={handleSave} className={!canManageMaintenance ? "opacity-50 pointer-events-none" : ""}>
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Vehicle</label>
-            <select
+          <form
+            onSubmit={handleSave}
+            className={!canManageMaintenance ? "opacity-50 pointer-events-none" : ""}
+          >
+            <SelectField
+              label="Vehicle"
               value={form.vehicleId}
               onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-2 text-sm mb-3"
             >
               <option value="">Select vehicle...</option>
               {eligibleVehicles.map((v) => (
@@ -162,127 +207,68 @@ export default function Maintenance() {
                   {v.name} ({v.status})
                 </option>
               ))}
-            </select>
+            </SelectField>
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Service Type</label>
-            <input
+            <TextField
+              label="Service Type"
+              placeholder="Oil Change"
               value={form.serviceType}
               onChange={(e) => setForm({ ...form, serviceType: e.target.value })}
-              placeholder="Oil Change"
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-2 text-sm mb-3"
             />
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Cost</label>
-            <input
+            <TextField
+              label="Cost"
               type="number"
+              placeholder="2500"
               value={form.cost}
               onChange={(e) => setForm({ ...form, cost: e.target.value })}
-              placeholder="2500"
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-2 text-sm mb-3"
             />
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Date</label>
-            <input
+            <TextField
+              label="Date"
               type="date"
               value={form.serviceDate}
               onChange={(e) => setForm({ ...form, serviceDate: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-2 text-sm mb-4"
             />
 
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={resetForm}
-                className="px-4 py-2 rounded text-sm border border-gray-300 dark:border-neutral-700"
-              >
+            <div className="flex gap-2 justify-end mt-1">
+              <Button type="button" variant="secondary" onClick={resetForm}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit || submitting}
-                className="px-4 py-2 rounded text-sm bg-accent text-black font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {submitting ? "Saving..." : "Save"}
-              </button>
+              </Button>
+              <Button type="submit" disabled={!canSubmit} loading={submitting}>
+                Save
+              </Button>
             </div>
           </form>
 
-          <div className="mt-6 text-xs text-gray-400 dark:text-neutral-600 space-y-1">
+          <div className="mt-6 pt-4 border-t border-ink-100 dark:border-ink-800 text-xs text-ink-400 space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-green-600 dark:text-green-400">Available</span>
-              <span>→</span>
-              <span className="text-amber-600 dark:text-amber-400">In Shop</span>
+              <StatusBadge status="Available" />
+              <ArrowRight size={12} />
+              <StatusBadge status="In Shop" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-amber-600 dark:text-amber-400">In Shop</span>
-              <span>→</span>
-              <span className="text-green-600 dark:text-green-400">Available</span>
+              <StatusBadge status="In Shop" />
+              <ArrowRight size={12} />
+              <StatusBadge status="Available" />
             </div>
-            <p>Note: In Shop vehicles are removed from the dispatch pool.</p>
+            <p>In Shop vehicles are removed from the dispatch pool.</p>
           </div>
-        </div>
+        </Card>
 
         {/* Service Log table */}
         <div>
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-3">SERVICE LOG</h2>
-
-          {loading && <p className="text-sm text-gray-400">Loading service log...</p>}
-
-          {!loading && (
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="text-left border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
-                  <th className="py-2 pr-4">Vehicle</th>
-                  <th className="py-2 pr-4">Service Type</th>
-                  <th className="py-2 pr-4">Cost</th>
-                  <th className="py-2 pr-4">Date</th>
-                  <th className="py-2 pr-4">Status</th>
-                  {canManageMaintenance && <th className="py-2 pr-4"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => {
-                  const vehicle = vehicleById(log.vehicle_id);
-                  return (
-                    <tr key={log.id} className="border-b border-gray-100 dark:border-neutral-900 align-top">
-                      <td className="py-2 pr-4">{vehicle ? vehicle.name : `#${log.vehicle_id}`}</td>
-                      <td className="py-2 pr-4">{log.service_type}</td>
-                      <td className="py-2 pr-4">₹{Number(log.cost).toLocaleString()}</td>
-                      <td className="py-2 pr-4">{log.service_date}</td>
-                      <td className="py-2 pr-4">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[log.status]}`}>
-                          {log.status}
-                        </span>
-                        {rowError[log.id] && (
-                          <div className="text-xs text-red-500 mt-1">{rowError[log.id]}</div>
-                        )}
-                      </td>
-                      {canManageMaintenance && (
-                        <td className="py-2 pr-4">
-                          {log.status === "In Shop" && (
-                            <button
-                              onClick={() => handleClose(log.id)}
-                              disabled={closingId === log.id}
-                              className="text-xs px-3 py-1.5 rounded border border-gray-300 dark:border-neutral-700 disabled:opacity-40"
-                            >
-                              {closingId === log.id ? "Closing..." : "Close"}
-                            </button>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-                {logs.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-gray-400 dark:text-neutral-600">
-                      No maintenance logs yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
+          <h2 className="text-sm font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wide mb-3">
+            Service Log
+          </h2>
+          <Table
+            columns={columns}
+            rows={logs}
+            rowKey={(log) => log.id}
+            loading={loading}
+            emptyTitle="No maintenance logs yet"
+            emptyDescription="Records logged here will appear as vehicles go in and out of the shop."
+          />
         </div>
       </div>
     </div>

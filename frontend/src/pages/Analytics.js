@@ -1,13 +1,27 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { Gauge, Percent, IndianRupee, TrendingUp } from "lucide-react";
 import { API_URL } from "../config";
+import Card from "../components/ui/Card";
+import Alert from "../components/ui/Alert";
+import Skeleton from "../components/ui/Skeleton";
 
-const COSTLIEST_COLORS = [
-  "bg-red-400",
-  "bg-orange-400",
-  "bg-amber-400",
-  "bg-blue-400",
-  "bg-neutral-400",
+const KPI_META = {
+  "Fuel Efficiency": { icon: Gauge, tone: "text-transit-500 bg-transit-400/10" },
+  "Fleet Utilization": { icon: Percent, tone: "text-signal-600 bg-signal-300/15" },
+  "Operational Cost": { icon: IndianRupee, tone: "text-ink-500 bg-ink-100 dark:bg-ink-800" },
+  "Vehicle ROI": { icon: TrendingUp, tone: "text-success-600 bg-success-500/10" },
+};
+
+// Costliest-vehicle bars cycle through the palette rather than raw red/orange/
+// amber/blue tailwind shades, so this chart reads consistently with badges
+// and KPI cards elsewhere in the app.
+const COSTLIEST_BAR_CLASSES = [
+  "bg-alert-400",
+  "bg-signal-300",
+  "bg-transit-400",
+  "bg-ink-300 dark:bg-ink-600",
+  "bg-ink-300 dark:bg-ink-600",
 ];
 
 function formatMonthLabel(month) {
@@ -49,6 +63,7 @@ export default function Analytics() {
 
   useEffect(() => {
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const kpiCards = summary
@@ -64,97 +79,107 @@ export default function Analytics() {
   const maxCost = Math.max(1, ...topCostliest.map((v) => v.total_cost));
 
   return (
-    <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
-      <h1 className="text-xl font-bold mb-1">Reports & Analytics</h1>
-      <p className="text-xs text-gray-400 dark:text-neutral-600 mb-5">
-        Live analytics from the API.
-      </p>
+    <div className="p-6">
+      <div className="mb-5">
+        <h1 className="font-display text-xl font-bold text-ink-900 dark:text-paper-50">
+          Reports & Analytics
+        </h1>
+        <p className="text-sm text-ink-400 mt-0.5">Live analytics from the API</p>
+      </div>
 
-      {loadError && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-4">
-          {loadError}
+      <Alert variant="error">{loadError}</Alert>
+
+      {loading && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <Skeleton className="h-3 w-20 mb-3" />
+              <Skeleton className="h-7 w-16" />
+            </Card>
+          ))}
         </div>
       )}
-
-      {loading && <p className="text-sm text-gray-400">Loading analytics...</p>}
 
       {!loading && summary && (
         <>
           {/* KPI cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            {kpiCards.map((card) => (
-              <div
-                key={card.label}
-                className={`border rounded-lg p-3 ${
-                  card.highlight
-                    ? "border-accent bg-accent/10"
-                    : "border-gray-200 dark:border-neutral-800"
-                }`}
-              >
-                <div className="text-xs text-gray-500 dark:text-neutral-400 mb-1">{card.label}</div>
-                <div className="text-2xl font-bold">{card.value}</div>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            {kpiCards.map((card) => {
+              const meta = KPI_META[card.label];
+              const Icon = meta.icon;
+              return (
+                <Card
+                  key={card.label}
+                  className={card.highlight ? "border-signal-300/60 dark:border-signal-300/40" : ""}
+                >
+                  <div className={`inline-flex h-8 w-8 items-center justify-center rounded-md mb-3 ${meta.tone}`}>
+                    <Icon size={16} />
+                  </div>
+                  <div className="text-xs text-ink-400 mb-1">{card.label}</div>
+                  <div className="font-display text-2xl font-bold text-ink-900 dark:text-paper-50">
+                    {card.value}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
 
-          <p className="text-xs text-gray-400 dark:text-neutral-600 mb-6">
+          <p className="text-xs text-ink-400 mb-6">
             ROI = Revenue − (Maintenance + Fuel) / Acquisition Cost
           </p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Monthly Revenue bar chart */}
-            <div>
-              <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-4">
-                MONTHLY REVENUE
+            <Card>
+              <h2 className="text-sm font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wide mb-4">
+                Monthly Revenue
               </h2>
               {monthlyRevenue.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-neutral-600">
-                  No completed trips with revenue yet.
-                </p>
+                <p className="text-sm text-ink-400">No completed trips with revenue yet.</p>
               ) : (
                 <div className="flex items-end gap-3 h-40">
                   {monthlyRevenue.map((m) => (
                     <div key={m.month} className="flex flex-col items-center flex-1 h-full justify-end">
                       <div
-                        className="w-full bg-blue-400 rounded-t"
+                        className="w-full bg-transit-400 rounded-t transition-all"
                         style={{ height: `${(m.revenue / maxRevenue) * 100}%` }}
                         title={`₹${m.revenue.toLocaleString()}`}
                       />
-                      <span className="text-xs text-gray-400 dark:text-neutral-500 mt-2">
-                        {formatMonthLabel(m.month)}
-                      </span>
+                      <span className="text-xs text-ink-400 mt-2">{formatMonthLabel(m.month)}</span>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
 
             {/* Top Costliest Vehicles */}
-            <div>
-              <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-4">
-                TOP COSTLIEST VEHICLES
+            <Card>
+              <h2 className="text-sm font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wide mb-4">
+                Top Costliest Vehicles
               </h2>
               {topCostliest.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-neutral-600">No cost data yet.</p>
+                <p className="text-sm text-ink-400">No cost data yet.</p>
               ) : (
                 <div className="space-y-3">
                   {topCostliest.map((v, i) => (
                     <div key={v.vehicle_id} className="flex items-center gap-3">
-                      <span className="text-xs w-16 text-gray-500 dark:text-neutral-400 truncate">
-                        {v.name}
-                      </span>
-                      <div className="flex-1 h-3 bg-neutral-100 dark:bg-neutral-900 rounded overflow-hidden">
+                      <span className="text-xs w-16 text-ink-500 dark:text-ink-400 truncate">{v.name}</span>
+                      <div className="flex-1 h-3 bg-paper-100 dark:bg-ink-800 rounded overflow-hidden">
                         <div
-                          className={`h-full ${COSTLIEST_COLORS[i % COSTLIEST_COLORS.length]}`}
+                          className={`h-full rounded transition-all ${
+                            COSTLIEST_BAR_CLASSES[i % COSTLIEST_BAR_CLASSES.length]
+                          }`}
                           style={{ width: `${(v.total_cost / maxCost) * 100}%` }}
                         />
                       </div>
-                      <span className="text-xs w-20 text-right">₹{v.total_cost.toLocaleString()}</span>
+                      <span className="text-xs w-20 text-right font-data text-ink-700 dark:text-ink-200">
+                        ₹{v.total_cost.toLocaleString()}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           </div>
         </>
       )}

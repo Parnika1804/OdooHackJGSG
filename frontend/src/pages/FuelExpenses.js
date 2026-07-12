@@ -1,7 +1,16 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { Plus, Fuel, Receipt, Calculator } from "lucide-react";
 import { API_URL } from "../config";
 import { canManage } from "../permissions";
+import { useToast } from "../components/ui/Toast";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import Table from "../components/ui/Table";
+import Modal from "../components/ui/Modal";
+import Alert from "../components/ui/Alert";
+import Skeleton from "../components/ui/Skeleton";
+import { TextField, SelectField } from "../components/ui/FormField";
 
 const emptyFuelForm = {
   vehicleId: "",
@@ -20,6 +29,7 @@ const emptyExpenseForm = {
 export default function FuelExpenses() {
   const role = localStorage.getItem("role");
   const canManageFuel = canManage("fuelExpenses", role);
+  const { showToast } = useToast();
 
   const [vehicles, setVehicles] = useState([]);
   const [fuelLogs, setFuelLogs] = useState([]);
@@ -67,9 +77,16 @@ export default function FuelExpenses() {
 
   useEffect(() => {
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const vehicleById = (id) => vehicles.find((v) => v.id === id);
+  const vehicleOptions = () =>
+    vehicles.map((v) => (
+      <option key={v.id} value={v.id}>
+        {v.name}
+      </option>
+    ));
 
   // ---------- Fuel log form ----------
   const canSubmitFuel =
@@ -93,6 +110,7 @@ export default function FuelExpenses() {
       );
       setFuelForm(emptyFuelForm);
       setShowFuelForm(false);
+      showToast("Fuel entry logged");
       fetchAll();
     } catch (err) {
       setFuelFormError(err.response?.data?.detail || "Failed to log fuel entry");
@@ -126,6 +144,7 @@ export default function FuelExpenses() {
       );
       setExpenseForm(emptyExpenseForm);
       setShowExpenseForm(false);
+      showToast("Expense added");
       fetchAll();
     } catch (err) {
       setExpenseFormError(err.response?.data?.detail || "Failed to add expense");
@@ -159,318 +178,278 @@ export default function FuelExpenses() {
     fetchOperationalCost(id);
   };
 
+  const fuelColumns = [
+    {
+      key: "vehicle_id",
+      label: "Vehicle",
+      render: (f) => {
+        const vehicle = vehicleById(f.vehicle_id);
+        return vehicle ? vehicle.name : `#${f.vehicle_id}`;
+      },
+    },
+    { key: "log_date", label: "Date", numeric: true },
+    { key: "liters", label: "Liters", numeric: true, render: (f) => `${f.liters} L` },
+    { key: "cost", label: "Cost", numeric: true, render: (f) => `₹${Number(f.cost).toLocaleString()}` },
+  ];
+
+  const expenseColumns = [
+    {
+      key: "vehicle_id",
+      label: "Vehicle",
+      render: (exp) => {
+        const vehicle = vehicleById(exp.vehicle_id);
+        return vehicle ? vehicle.name : `#${exp.vehicle_id}`;
+      },
+    },
+    { key: "expense_type", label: "Type" },
+    { key: "expense_date", label: "Date", numeric: true },
+    { key: "amount", label: "Amount", numeric: true, render: (exp) => `₹${Number(exp.amount).toLocaleString()}` },
+  ];
+
   return (
-    <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
-      <div className="flex justify-between items-center mb-1">
-        <h1 className="text-xl font-bold">Fuel & Expense Management</h1>
+    <div className="p-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-1">
+        <h1 className="font-display text-xl font-bold text-ink-900 dark:text-paper-50">
+          Fuel & Expense Management
+        </h1>
         {canManageFuel && (
           <div className="flex gap-2">
-            <button
-              onClick={() => setShowFuelForm(true)}
-              className="bg-accent text-black font-semibold px-4 py-2 rounded text-sm hover:opacity-90"
-            >
-              + Log Fuel
-            </button>
-            <button
-              onClick={() => setShowExpenseForm(true)}
-              className="bg-accent text-black font-semibold px-4 py-2 rounded text-sm hover:opacity-90"
-            >
-              + Add Expense
-            </button>
+            <Button icon={Fuel} onClick={() => setShowFuelForm(true)}>
+              Log Fuel
+            </Button>
+            <Button variant="secondary" icon={Plus} onClick={() => setShowExpenseForm(true)}>
+              Add Expense
+            </Button>
           </div>
         )}
       </div>
-      <p className="text-xs text-gray-400 dark:text-neutral-600 mb-5">
-        Live fuel and expense data from the API.
+      <p className="text-sm text-ink-400 mb-5">
+        {fuelLogs.length} fuel log{fuelLogs.length === 1 ? "" : "s"} · {expenses.length} other expense
+        {expenses.length === 1 ? "" : "s"}
       </p>
 
       {!canManageFuel && (
-        <div className="bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm px-3 py-2 rounded mb-4">
-          Your role has view-only access to Fuel & Expenses. Only Financial Analyst can log fuel or add expenses.
-        </div>
+        <Alert variant="info">
+          Your role has view-only access to Fuel & Expenses. Only Financial Analyst can log fuel or
+          add expenses.
+        </Alert>
       )}
+      <Alert variant="error">{loadError}</Alert>
 
-      {loadError && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-4">
-          {loadError}
-        </div>
-      )}
+      {/* Fuel Logs */}
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wide mb-3">
+        <Fuel size={15} />
+        Fuel Logs
+      </h2>
+      <div className="mb-6">
+        <Table
+          columns={fuelColumns}
+          rows={fuelLogs}
+          rowKey={(f) => f.id}
+          loading={loading}
+          emptyTitle="No fuel logs yet"
+        />
+      </div>
 
-      {loading && <p className="text-sm text-gray-400">Loading...</p>}
+      {/* Other Expenses */}
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wide mb-3">
+        <Receipt size={15} />
+        Other Expenses (Toll / Misc)
+      </h2>
+      <div className="mb-6">
+        <Table
+          columns={expenseColumns}
+          rows={expenses}
+          rowKey={(exp) => exp.id}
+          loading={loading}
+          emptyTitle="No other expenses yet"
+        />
+      </div>
 
-      {!loading && (
-        <>
-          {/* Fuel Logs */}
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-2">FUEL LOGS</h2>
-          <table className="w-full text-sm border-collapse mb-6">
-            <thead>
-              <tr className="text-left border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
-                <th className="py-2 pr-4">Vehicle</th>
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Liters</th>
-                <th className="py-2 pr-4">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fuelLogs.map((f) => {
-                const vehicle = vehicleById(f.vehicle_id);
-                return (
-                  <tr key={f.id} className="border-b border-gray-100 dark:border-neutral-900">
-                    <td className="py-2 pr-4">{vehicle ? vehicle.name : `#${f.vehicle_id}`}</td>
-                    <td className="py-2 pr-4">{f.log_date}</td>
-                    <td className="py-2 pr-4">{f.liters} L</td>
-                    <td className="py-2 pr-4">₹{Number(f.cost).toLocaleString()}</td>
-                  </tr>
-                );
-              })}
-              {fuelLogs.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-gray-400 dark:text-neutral-600">
-                    No fuel logs yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      {/* Total Operational Cost */}
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wide mb-3">
+        <Calculator size={15} />
+        Total Operational Cost (Fuel + Maintenance + Expenses)
+      </h2>
+      <Card className="max-w-md">
+        <SelectField
+          label="Select Vehicle"
+          value={costVehicleId}
+          onChange={handleCostVehicleChange}
+          wrapperClassName="mb-3"
+        >
+          <option value="">Select vehicle...</option>
+          {vehicleOptions()}
+        </SelectField>
 
-          {/* Other Expenses */}
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-2">
-            OTHER EXPENSES (TOLL / MISC)
-          </h2>
-          <table className="w-full text-sm border-collapse mb-6">
-            <thead>
-              <tr className="text-left border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
-                <th className="py-2 pr-4">Vehicle</th>
-                <th className="py-2 pr-4">Type</th>
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expenses.map((exp) => {
-                const vehicle = vehicleById(exp.vehicle_id);
-                return (
-                  <tr key={exp.id} className="border-b border-gray-100 dark:border-neutral-900">
-                    <td className="py-2 pr-4">{vehicle ? vehicle.name : `#${exp.vehicle_id}`}</td>
-                    <td className="py-2 pr-4">{exp.expense_type}</td>
-                    <td className="py-2 pr-4">{exp.expense_date}</td>
-                    <td className="py-2 pr-4">₹{Number(exp.amount).toLocaleString()}</td>
-                  </tr>
-                );
-              })}
-              {expenses.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-gray-400 dark:text-neutral-600">
-                    No other expenses yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          {/* Total Operational Cost */}
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-2">
-            TOTAL OPERATIONAL COST (FUEL + MAINTENANCE + EXPENSES)
-          </h2>
-          <div className="border border-gray-200 dark:border-neutral-800 rounded-lg p-4 max-w-md">
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Select Vehicle</label>
-            <select
-              value={costVehicleId}
-              onChange={handleCostVehicleChange}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-2 text-sm mb-3"
-            >
-              <option value="">Select vehicle...</option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-
-            {costLoading && <p className="text-sm text-gray-400">Loading...</p>}
-            {costError && (
-              <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded">
-                {costError}
-              </div>
-            )}
-
-            {costData && !costLoading && (
-              <div className="text-sm space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">Fuel cost</span>
-                  <span>₹{costData.fuel_cost.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">Maintenance cost</span>
-                  <span>₹{costData.maintenance_cost.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-neutral-400">Other expenses</span>
-                  <span>₹{costData.other_expenses.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-semibold border-t border-gray-200 dark:border-neutral-800 pt-2 mt-2">
-                  <span>Total Operational Cost</span>
-                  <span>₹{costData.total_operational_cost.toLocaleString()}</span>
-                </div>
-              </div>
-            )}
+        {costLoading && (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
           </div>
-        </>
-      )}
+        )}
+        <Alert variant="error">{costError}</Alert>
+
+        {costData && !costLoading && (
+          <div className="text-sm space-y-1.5">
+            <div className="flex justify-between">
+              <span className="text-ink-400">Fuel cost</span>
+              <span className="font-data text-ink-700 dark:text-ink-200">
+                ₹{costData.fuel_cost.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-400">Maintenance cost</span>
+              <span className="font-data text-ink-700 dark:text-ink-200">
+                ₹{costData.maintenance_cost.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-400">Other expenses</span>
+              <span className="font-data text-ink-700 dark:text-ink-200">
+                ₹{costData.other_expenses.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between font-semibold border-t border-ink-100 dark:border-ink-800 pt-2 mt-2 text-ink-900 dark:text-paper-50">
+              <span>Total Operational Cost</span>
+              <span className="font-data">₹{costData.total_operational_cost.toLocaleString()}</span>
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* Log Fuel modal */}
-      {showFuelForm && canManageFuel && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <form
-            onSubmit={handleLogFuel}
-            className="bg-white dark:bg-neutral-900 rounded-lg p-6 w-96 shadow-xl"
-          >
-            <h2 className="text-lg font-bold mb-4">Log Fuel</h2>
-
-            {fuelFormError && (
-              <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-                {fuelFormError}
-              </div>
-            )}
-
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Vehicle</label>
-            <select
-              required
-              value={fuelForm.vehicleId}
-              onChange={(e) => setFuelForm({ ...fuelForm, vehicleId: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
+      <Modal
+        open={showFuelForm && canManageFuel}
+        onClose={() => {
+          setShowFuelForm(false);
+          setFuelFormError("");
+        }}
+        title="Log Fuel"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowFuelForm(false);
+                setFuelFormError("");
+              }}
             >
-              <option value="">Select vehicle...</option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
+              Cancel
+            </Button>
+            <Button type="submit" form="log-fuel-form" loading={savingFuel}>
+              Log Fuel
+            </Button>
+          </>
+        }
+      >
+        <form id="log-fuel-form" onSubmit={handleLogFuel}>
+          <Alert variant="error">{fuelFormError}</Alert>
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Liters</label>
-            <input
-              required
-              type="number"
-              value={fuelForm.liters}
-              onChange={(e) => setFuelForm({ ...fuelForm, liters: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
+          <SelectField
+            label="Vehicle"
+            required
+            value={fuelForm.vehicleId}
+            onChange={(e) => setFuelForm({ ...fuelForm, vehicleId: e.target.value })}
+          >
+            <option value="">Select vehicle...</option>
+            {vehicleOptions()}
+          </SelectField>
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Cost</label>
-            <input
-              required
-              type="number"
-              value={fuelForm.cost}
-              onChange={(e) => setFuelForm({ ...fuelForm, cost: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
+          <TextField
+            label="Liters"
+            required
+            type="number"
+            value={fuelForm.liters}
+            onChange={(e) => setFuelForm({ ...fuelForm, liters: e.target.value })}
+          />
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Date</label>
-            <input
-              required
-              type="date"
-              value={fuelForm.logDate}
-              onChange={(e) => setFuelForm({ ...fuelForm, logDate: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-4"
-            />
+          <TextField
+            label="Cost"
+            required
+            type="number"
+            value={fuelForm.cost}
+            onChange={(e) => setFuelForm({ ...fuelForm, cost: e.target.value })}
+          />
 
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => { setShowFuelForm(false); setFuelFormError(""); }}
-                className="px-4 py-2 rounded text-sm border border-gray-300 dark:border-neutral-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={savingFuel}
-                className="px-4 py-2 rounded text-sm bg-accent text-black font-semibold hover:opacity-90 disabled:opacity-40"
-              >
-                {savingFuel ? "Saving..." : "Log Fuel"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          <TextField
+            label="Date"
+            required
+            type="date"
+            value={fuelForm.logDate}
+            onChange={(e) => setFuelForm({ ...fuelForm, logDate: e.target.value })}
+            wrapperClassName="mb-0"
+          />
+        </form>
+      </Modal>
 
       {/* Add Expense modal */}
-      {showExpenseForm && canManageFuel && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <form
-            onSubmit={handleAddExpense}
-            className="bg-white dark:bg-neutral-900 rounded-lg p-6 w-96 shadow-xl"
-          >
-            <h2 className="text-lg font-bold mb-4">Add Expense</h2>
-
-            {expenseFormError && (
-              <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-                {expenseFormError}
-              </div>
-            )}
-
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Vehicle</label>
-            <select
-              required
-              value={expenseForm.vehicleId}
-              onChange={(e) => setExpenseForm({ ...expenseForm, vehicleId: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
+      <Modal
+        open={showExpenseForm && canManageFuel}
+        onClose={() => {
+          setShowExpenseForm(false);
+          setExpenseFormError("");
+        }}
+        title="Add Expense"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowExpenseForm(false);
+                setExpenseFormError("");
+              }}
             >
-              <option value="">Select vehicle...</option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
+              Cancel
+            </Button>
+            <Button type="submit" form="add-expense-form" loading={savingExpense}>
+              Add Expense
+            </Button>
+          </>
+        }
+      >
+        <form id="add-expense-form" onSubmit={handleAddExpense}>
+          <Alert variant="error">{expenseFormError}</Alert>
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Expense Type</label>
-            <input
-              required
-              value={expenseForm.expenseType}
-              onChange={(e) => setExpenseForm({ ...expenseForm, expenseType: e.target.value })}
-              placeholder="Toll"
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
+          <SelectField
+            label="Vehicle"
+            required
+            value={expenseForm.vehicleId}
+            onChange={(e) => setExpenseForm({ ...expenseForm, vehicleId: e.target.value })}
+          >
+            <option value="">Select vehicle...</option>
+            {vehicleOptions()}
+          </SelectField>
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Amount</label>
-            <input
-              required
-              type="number"
-              value={expenseForm.amount}
-              onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
+          <TextField
+            label="Expense Type"
+            required
+            placeholder="Toll"
+            value={expenseForm.expenseType}
+            onChange={(e) => setExpenseForm({ ...expenseForm, expenseType: e.target.value })}
+          />
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Date</label>
-            <input
-              required
-              type="date"
-              value={expenseForm.expenseDate}
-              onChange={(e) => setExpenseForm({ ...expenseForm, expenseDate: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-4"
-            />
+          <TextField
+            label="Amount"
+            required
+            type="number"
+            value={expenseForm.amount}
+            onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+          />
 
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => { setShowExpenseForm(false); setExpenseFormError(""); }}
-                className="px-4 py-2 rounded text-sm border border-gray-300 dark:border-neutral-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={savingExpense}
-                className="px-4 py-2 rounded text-sm bg-accent text-black font-semibold hover:opacity-90 disabled:opacity-40"
-              >
-                {savingExpense ? "Saving..." : "Add Expense"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          <TextField
+            label="Date"
+            required
+            type="date"
+            value={expenseForm.expenseDate}
+            onChange={(e) => setExpenseForm({ ...expenseForm, expenseDate: e.target.value })}
+            wrapperClassName="mb-0"
+          />
+        </form>
+      </Modal>
     </div>
   );
 }

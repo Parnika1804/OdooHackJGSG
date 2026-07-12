@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { Plus, Download, Search, ShieldAlert } from "lucide-react";
 import { API_URL } from "../config";
 import { canManage } from "../permissions";
 import { downloadCsv } from "../utils/exportCsv";
-
-const statusStyles = {
-  Available: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  "On Trip": "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  "Off Duty": "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  Suspended: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-};
+import { useToast } from "../components/ui/Toast";
+import Button from "../components/ui/Button";
+import Table from "../components/ui/Table";
+import Modal from "../components/ui/Modal";
+import Alert from "../components/ui/Alert";
+import Badge, { StatusBadge } from "../components/ui/Badge";
+import { TextField, SelectField } from "../components/ui/FormField";
 
 const isExpired = (dateStr) => new Date(dateStr) < new Date();
 
@@ -23,9 +24,34 @@ const emptyForm = {
   status: "Available",
 };
 
+// Numeric under the hood, so sorting compares numbers rather than lexicographically.
+const NUMERIC_COLUMNS = ["safety_score"];
+
+function SafetyScore({ score }) {
+  const value = Number(score);
+  const tone =
+    value >= 85 ? "text-success-600 dark:text-success-400" :
+    value >= 60 ? "text-signal-600 dark:text-signal-300" :
+    "text-alert-600 dark:text-alert-400";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-14 rounded-full bg-ink-100 dark:bg-ink-800 overflow-hidden">
+        <div
+          className={`h-full rounded-full ${
+            value >= 85 ? "bg-success-400" : value >= 60 ? "bg-signal-300" : "bg-alert-400"
+          }`}
+          style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+        />
+      </div>
+      <span className={`font-data text-xs font-semibold ${tone}`}>{value}%</span>
+    </div>
+  );
+}
+
 export default function Drivers() {
   const role = localStorage.getItem("role");
   const canManageDrivers = canManage("drivers", role);
+  const { showToast } = useToast();
 
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,8 +63,8 @@ export default function Drivers() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState("");
 
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -46,11 +72,11 @@ export default function Drivers() {
 
   const handleExportCsv = async () => {
     setExporting(true);
-    setExportError("");
     try {
       await downloadCsv("/export/drivers", "drivers.csv");
+      showToast("Drivers exported to CSV");
     } catch (err) {
-      setExportError("Failed to export drivers CSV");
+      showToast("Failed to export drivers CSV", "error");
     } finally {
       setExporting(false);
     }
@@ -71,6 +97,7 @@ export default function Drivers() {
 
   useEffect(() => {
     fetchDrivers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = drivers.filter((d) => {
@@ -81,8 +108,6 @@ export default function Drivers() {
     const matchesCategory = categoryFilter === "All" || d.license_category === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
   });
-
-  const NUMERIC_COLUMNS = ["safety_score"];
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -108,14 +133,10 @@ export default function Drivers() {
     return 0;
   });
 
-  const sortArrow = (key) => {
-    if (sortConfig.key !== key) return "";
-    return sortConfig.direction === "asc" ? " ▲" : " ▼";
-  };
-
   const handleAddDriver = async (e) => {
     e.preventDefault();
     setFormError("");
+    setSubmitting(true);
     try {
       await axios.post(
         `${API_URL}/drivers`,
@@ -127,212 +148,197 @@ export default function Drivers() {
       );
       setForm(emptyForm);
       setShowForm(false);
+      showToast(`${form.name || "Driver"} added to the roster`);
       fetchDrivers();
     } catch (err) {
       setFormError(err.response?.data?.detail || "Failed to add driver");
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const expiredCount = drivers.filter((d) => isExpired(d.license_expiry_date)).length;
+
+  const columns = [
+    { key: "name", label: "Driver", sortable: true },
+    { key: "license_number", label: "License No.", sortable: true, numeric: true },
+    { key: "license_category", label: "Category", sortable: true },
+    {
+      key: "license_expiry_date",
+      label: "Expiry",
+      sortable: true,
+      render: (d) =>
+        isExpired(d.license_expiry_date) ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-data text-ink-700 dark:text-ink-200">{d.license_expiry_date}</span>
+            <Badge tone="alert">Expired</Badge>
+          </span>
+        ) : (
+          <span className="font-data">{d.license_expiry_date}</span>
+        ),
+    },
+    { key: "contact_number", label: "Contact", numeric: true },
+    {
+      key: "safety_score",
+      label: "Safety",
+      sortable: true,
+      render: (d) => <SafetyScore score={d.safety_score} />,
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      render: (d) => <StatusBadge status={d.status} />,
+    },
+  ];
+
   return (
-    <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Drivers & Safety Profiles</h1>
+    <div className="p-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
+        <div>
+          <h1 className="font-display text-xl font-bold text-ink-900 dark:text-paper-50">
+            Drivers & Safety Profiles
+          </h1>
+          <p className="text-sm text-ink-400 mt-0.5">
+            {drivers.length} driver{drivers.length === 1 ? "" : "s"} on record
+            {expiredCount > 0 && (
+              <span className="text-alert-600 dark:text-alert-400 font-medium">
+                {" "}· {expiredCount} license{expiredCount === 1 ? "" : "s"} expired
+              </span>
+            )}
+          </p>
+        </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleExportCsv}
-            disabled={exporting}
-            className="border border-gray-300 dark:border-neutral-700 px-4 py-2 rounded text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 disabled:opacity-40"
-          >
-            {exporting ? "Exporting..." : "Export CSV"}
-          </button>
+          <Button variant="secondary" icon={Download} loading={exporting} onClick={handleExportCsv}>
+            Export CSV
+          </Button>
           {canManageDrivers && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-accent text-black font-semibold px-4 py-2 rounded text-sm hover:opacity-90"
-            >
-              + Add Driver
-            </button>
+            <Button icon={Plus} onClick={() => setShowForm(true)}>
+              Add Driver
+            </Button>
           )}
         </div>
       </div>
 
-      {exportError && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-          {exportError}
-        </div>
-      )}
+      <Alert variant="error">{loadError}</Alert>
 
-      <div className="flex gap-3 mb-4">
-        <input
-          type="text"
-          placeholder="Search name / license..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm flex-1"
-        />
-        <select
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+          <input
+            type="text"
+            placeholder="Search name / license..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-md border border-ink-200 dark:border-ink-700 bg-paper-50 dark:bg-ink-950 pl-9 pr-3 py-2 text-sm text-ink-900 dark:text-ink-100 placeholder:text-ink-400 focus:border-signal-300 focus:ring-2 focus:ring-signal-300/30 outline-none"
+          />
+        </div>
+        <SelectField
+          wrapperClassName="mb-0 w-40"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
         >
           <option>All</option>
           <option>Available</option>
           <option>On Trip</option>
           <option>Off Duty</option>
           <option>Suspended</option>
-        </select>
-        <select
+        </SelectField>
+        <SelectField
+          wrapperClassName="mb-0 w-32"
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
         >
           <option>All</option>
           <option>LMV</option>
           <option>HMV</option>
-        </select>
+        </SelectField>
       </div>
 
-      {loading && <p className="text-sm text-gray-400">Loading drivers...</p>}
-      {loadError && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-          {loadError}
-        </div>
-      )}
+      <Table
+        columns={columns}
+        rows={sorted}
+        rowKey={(d) => d.id}
+        sortConfig={sortConfig}
+        onSort={handleSort}
+        loading={loading}
+        emptyTitle="No drivers match your filters"
+        emptyDescription="Try clearing the search or filters above."
+      />
 
-      {!loading && !loadError && (
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="text-left border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("name")}>
-                Driver{sortArrow("name")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("license_number")}>
-                License No.{sortArrow("license_number")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("license_category")}>
-                Category{sortArrow("license_category")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("license_expiry_date")}>
-                Expiry{sortArrow("license_expiry_date")}
-              </th>
-              <th className="py-2 pr-4">Contact</th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("safety_score")}>
-                Safety{sortArrow("safety_score")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("status")}>
-                Status{sortArrow("status")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((d) => (
-              <tr key={d.id} className="border-b border-gray-100 dark:border-neutral-900">
-                <td className="py-2 pr-4">{d.name}</td>
-                <td className="py-2 pr-4">{d.license_number}</td>
-                <td className="py-2 pr-4">{d.license_category}</td>
-                <td className={`py-2 pr-4 ${isExpired(d.license_expiry_date) ? "text-red-500 font-medium" : ""}`}>
-                  {d.license_expiry_date}
-                  {isExpired(d.license_expiry_date) && " EXPIRED"}
-                </td>
-                <td className="py-2 pr-4">{d.contact_number}</td>
-                <td className="py-2 pr-4">{d.safety_score}%</td>
-                <td className="py-2 pr-4">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[d.status]}`}>
-                    {d.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-6 text-center text-gray-400 dark:text-neutral-600">
-                  No drivers match your search.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
+      <div className="flex items-start gap-2 mt-3 text-xs text-ink-400">
+        <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+        <p>Rule: expired license or Suspended status blocks a driver from trip assignment.</p>
+      </div>
 
-      <p className="text-xs text-gray-400 dark:text-neutral-600 mt-3">
-        Rule: Expired license or Suspended status → blocked from trip assignment
-      </p>
-
-      {showForm && canManageDrivers && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <form
-            onSubmit={handleAddDriver}
-            className="bg-white dark:bg-neutral-900 rounded-lg p-6 w-96 shadow-xl"
-          >
-            <h2 className="text-lg font-bold mb-4">Add Driver</h2>
-
-            {formError && (
-              <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-                {formError}
-              </div>
-            )}
-
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Name</label>
-            <input
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
-
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">License Number</label>
-            <input
-              required
-              value={form.license_number}
-              onChange={(e) => setForm({ ...form, license_number: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
-
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">License Category</label>
-            <select
-              value={form.license_category}
-              onChange={(e) => setForm({ ...form, license_category: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
+      <Modal
+        open={showForm && canManageDrivers}
+        onClose={() => {
+          setShowForm(false);
+          setFormError("");
+        }}
+        title="Add Driver"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowForm(false);
+                setFormError("");
+              }}
             >
-              <option>LMV</option>
-              <option>HMV</option>
-            </select>
+              Cancel
+            </Button>
+            <Button type="submit" form="add-driver-form" loading={submitting}>
+              Add Driver
+            </Button>
+          </>
+        }
+      >
+        <form id="add-driver-form" onSubmit={handleAddDriver}>
+          <Alert variant="error">{formError}</Alert>
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">License Expiry Date</label>
-            <input
-              required
-              type="date"
-              value={form.license_expiry_date}
-              onChange={(e) => setForm({ ...form, license_expiry_date: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
+          <TextField
+            label="Name"
+            required
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Contact Number</label>
-            <input
-              required
-              value={form.contact_number}
-              onChange={(e) => setForm({ ...form, contact_number: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-4"
-            />
+          <TextField
+            label="License Number"
+            required
+            value={form.license_number}
+            onChange={(e) => setForm({ ...form, license_number: e.target.value })}
+          />
 
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => { setShowForm(false); setFormError(""); }}
-                className="px-4 py-2 rounded text-sm border border-gray-300 dark:border-neutral-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded text-sm bg-accent text-black font-semibold hover:opacity-90"
-              >
-                Add Driver
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          <SelectField
+            label="License Category"
+            value={form.license_category}
+            onChange={(e) => setForm({ ...form, license_category: e.target.value })}
+          >
+            <option>LMV</option>
+            <option>HMV</option>
+          </SelectField>
+
+          <TextField
+            label="License Expiry Date"
+            required
+            type="date"
+            value={form.license_expiry_date}
+            onChange={(e) => setForm({ ...form, license_expiry_date: e.target.value })}
+          />
+
+          <TextField
+            label="Contact Number"
+            required
+            value={form.contact_number}
+            onChange={(e) => setForm({ ...form, contact_number: e.target.value })}
+            wrapperClassName="mb-0"
+          />
+        </form>
+      </Modal>
     </div>
   );
 }
