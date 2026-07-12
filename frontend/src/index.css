@@ -2,6 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-white text-gray-900 dark:bg-neutral-950 dark:text-neutral-100;
+@layer base {
+  :root {
+    /* Raw hex mirrors of the Tailwind token system, for contexts that need
+       plain CSS values — Chart.js datasets, inline SVG, canvas, etc.
+       Keep in sync with tailwind.config.js. */
+    --color-ink-950: #0B0E14;
+    --color-ink-900: #101520;
+    --color-ink-800: #191F29;
+    --color-ink-700: #262E3B;
+    --color-ink-500: #4A5361;
+    --color-ink-300: #9AA5B1;
+    --color-paper-50: #FCFCFD;
+    --color-paper-100: #F6F7F9;
+    --color-signal-300: #F2A93B;
+    --color-signal-400: #E8940F;
+    --color-transit-300: #33C8B7;
+    --color-transit-400: #1CA895;
+    --color-success-400: #3FBE79;
+    --color-alert-400: #EF5A5A;
+  }
+
+  html {
+    font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-paper-100 text-ink-900 dark:bg-ink-950 dark:text-ink-100;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  /* Numeric / identifier data (plate numbers, trip IDs, timestamps, KPI
+     figures) uses the mono face throughout — the "ops terminal" signature
+     that distinguishes TransitOps' data density from a generic dashboard. */
+  .font-data {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+    font-feature-settings: "tnum" 1, "zero" 1;
+  }
+
+  /* Visible keyboard focus everywhere, styled with the signal accent
+     instead of the browser default. */
+  :focus-visible {
+    outline: 2px solid var(--color-signal-400);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Slim, low-contrast scrollbars that fit a dense ops console rather than
+     the chunky OS default. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: theme("colors.ink.200");
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: theme("colors.ink.700");
+  }
 }
