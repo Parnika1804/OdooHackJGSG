@@ -136,3 +136,26 @@ CREATE INDEX idx_fuel_logs_vehicle_id ON fuel_logs(vehicle_id);
 CREATE INDEX idx_expenses_vehicle_id ON expenses(vehicle_id);
 CREATE INDEX idx_vehicles_region ON vehicles(region);
 CREATE INDEX idx_vehicle_documents_vehicle_id ON vehicle_documents(vehicle_id);
+-- =========================================
+-- 8. TRIGGERS
+-- =========================================
+CREATE OR REPLACE FUNCTION enforce_cargo_capacity()
+RETURNS TRIGGER AS $$
+DECLARE
+  max_capacity NUMERIC;
+BEGIN
+  SELECT max_load_capacity_kg INTO max_capacity
+  FROM vehicles WHERE id = NEW.vehicle_id;
+
+  IF NEW.cargo_weight_kg > max_capacity THEN
+    RAISE EXCEPTION 'Cargo weight (%) exceeds vehicle capacity (%)', NEW.cargo_weight_kg, max_capacity;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_enforce_cargo_capacity
+BEFORE INSERT OR UPDATE ON trips
+FOR EACH ROW
+EXECUTE FUNCTION enforce_cargo_capacity();
