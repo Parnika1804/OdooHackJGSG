@@ -1,62 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { API_URL } from "../config";
 import { canManage } from "../permissions";
-
-// ---------------------------------------------------------------------------
-// MOCK DATA — replace with real API calls in Step 16 (feature/trip-connect).
-// Once backend/trips.py exists, swap:
-//   - MOCK_VEHICLES / MOCK_DRIVERS  -> GET /vehicles, GET /drivers
-//   - MOCK_TRIPS (initial state)    -> GET /trips
-//   - handleCreateTrip              -> POST /trips
-//   - handleDispatch                -> PATCH /trips/{id}/dispatch
-//   - handleComplete                -> PATCH /trips/{id}/complete
-//   - handleCancel                  -> PATCH /trips/{id}/cancel
-// The shape of the mock objects mirrors the real DB columns (schema.sql) so
-// the swap should just be replacing the data source, not the UI logic.
-// ---------------------------------------------------------------------------
-
-const MOCK_VEHICLES = [
-  { id: 1, name: "Van-05", status: "Available", max_load_capacity_kg: 500 },
-  { id: 2, name: "Truck-04", status: "Available", max_load_capacity_kg: 3000 },
-  { id: 3, name: "Mini-03", status: "In Shop", max_load_capacity_kg: 200 },
-  { id: 4, name: "Van-09", status: "Retired", max_load_capacity_kg: 500 },
-];
-
-const MOCK_DRIVERS = [
-  { id: 1, name: "Alex", status: "Available" },
-  { id: 2, name: "Priya", status: "Available" },
-  { id: 3, name: "Suresh", status: "On Trip" },
-  { id: 4, name: "John", status: "Suspended" },
-];
-
-const MOCK_TRIPS_INITIAL = [
-  {
-    id: "TR001",
-    source: "Gandhinagar Depot",
-    destination: "Ahmedabad Hub",
-    vehicleName: "Van-05",
-    driverName: "Alex",
-    status: "Dispatched",
-    note: "45 min",
-  },
-  {
-    id: "TR004",
-    source: "Vatva Industrial Area",
-    destination: "Sanand Warehouse",
-    vehicleName: "Truck-04",
-    driverName: "Suresh",
-    status: "Draft",
-    note: "Awaiting driver",
-  },
-  {
-    id: "TR006",
-    source: "Mansa",
-    destination: "Kalol Depot",
-    vehicleName: null,
-    driverName: null,
-    status: "Cancelled",
-    note: "Vehicle sent to shop",
-  },
-];
 
 const LIFECYCLE_STEPS = ["Draft", "Dispatched", "Completed", "Cancelled"];
 
@@ -76,17 +21,68 @@ const emptyForm = {
   plannedDistance: "",
 };
 
+const emptyCompleteForm = {
+  finalOdometer: "",
+  fuelConsumed: "",
+  revenue: "",
+};
+
 export default function Trips() {
   const role = localStorage.getItem("role");
   const canDispatch = canManage("trips", role); // only Dispatcher, per RBAC matrix
 
-  const [trips, setTrips] = useState(MOCK_TRIPS_INITIAL);
+  const [trips, setTrips] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
   const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const availableVehicles = MOCK_VEHICLES.filter((v) => v.status === "Available");
-  const availableDrivers = MOCK_DRIVERS.filter((d) => d.status === "Available");
+  // Trip currently being completed (opens the odometer/fuel modal)
+  const [completingTrip, setCompletingTrip] = useState(null);
+  const [completeForm, setCompleteForm] = useState(emptyCompleteForm);
+  const [completeError, setCompleteError] = useState("");
 
-  const selectedVehicle = MOCK_VEHICLES.find((v) => String(v.id) === form.vehicleId);
+  // Track per-trip action errors (dispatch/cancel) inline on the card
+  const [actionError, setActionError] = useState({});
+
+  const authHeaders = () => ({
+    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+  });
+
+  const fetchAll = async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const [tripsRes, vehiclesRes, driversRes] = await Promise.all([
+        axios.get(`${API_URL}/trips`, authHeaders()),
+        axios.get(`${API_URL}/vehicles`, authHeaders()),
+        axios.get(`${API_URL}/drivers`, authHeaders()),
+      ]);
+      setTrips(tripsRes.data.trips);
+      setVehicles(vehiclesRes.data.vehicles);
+      setDrivers(driversRes.data.drivers);
+    } catch (err) {
+      setLoadError(err.response?.data?.detail || "Failed to load trip data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAll();
+  }, []);
+
+  const vehicleById = (id) => vehicles.find((v) => v.id === id);
+  const driverById = (id) => drivers.find((d) => d.id === id);
+
+  const availableVehicles = vehicles.filter((v) => v.status === "Available");
+  const availableDrivers = drivers.filter((d) => d.status === "Available");
+
+  const selectedVehicle = vehicles.find((v) => String(v.id) === form.vehicleId);
   const cargoWeightNum = Number(form.cargoWeight) || 0;
   const capacityExceededBy = selectedVehicle
     ? cargoWeightNum - selectedVehicle.max_load_capacity_kg
@@ -102,56 +98,107 @@ export default function Trips() {
     Number(form.plannedDistance) > 0 &&
     !capacityExceeded;
 
-  const resetForm = () => setForm(emptyForm);
+  const resetForm = () => {
+    setForm(emptyForm);
+    setFormError("");
+  };
 
-  // TODO (Step 16): replace with POST /trips
-  const handleCreateTrip = (e) => {
+  const noteForTrip = (t) => {
+    if (t.status === "Draft") return t.vehicle_id && t.driver_id ? "Awaiting dispatch" : "Awaiting vehicle/driver";
+    if (t.status === "Dispatched") return "In transit";
+    if (t.status === "Completed") return "Delivered";
+    if (t.status === "Cancelled") return "Cancelled";
+    return "";
+  };
+
+  const handleCreateTrip = async (e) => {
     e.preventDefault();
     if (!canSubmit) return;
-
-    const vehicle = MOCK_VEHICLES.find((v) => String(v.id) === form.vehicleId);
-    const driver = MOCK_DRIVERS.find((d) => String(d.id) === form.driverId);
-
-    const newTrip = {
-      id: `TR${String(trips.length + 1).padStart(3, "0")}`,
-      source: form.source,
-      destination: form.destination,
-      vehicleName: vehicle?.name,
-      driverName: driver?.name,
-      status: "Draft",
-      note: "Awaiting dispatch",
-    };
-
-    setTrips([newTrip, ...trips]);
-    resetForm();
+    setSubmitting(true);
+    setFormError("");
+    try {
+      await axios.post(
+        `${API_URL}/trips`,
+        {
+          source: form.source,
+          destination: form.destination,
+          vehicle_id: Number(form.vehicleId),
+          driver_id: Number(form.driverId),
+          cargo_weight_kg: cargoWeightNum,
+          planned_distance_km: Number(form.plannedDistance),
+        },
+        authHeaders()
+      );
+      resetForm();
+      fetchAll();
+    } catch (err) {
+      setFormError(err.response?.data?.detail || "Failed to create trip");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // TODO (Step 16): replace with PATCH /trips/{id}/dispatch
-  const handleDispatch = (tripId) => {
-    setTrips((prev) =>
-      prev.map((t) => (t.id === tripId ? { ...t, status: "Dispatched", note: "In transit" } : t))
-    );
+  const clearActionError = (tripId) =>
+    setActionError((prev) => ({ ...prev, [tripId]: "" }));
+
+  const handleDispatch = async (tripId) => {
+    clearActionError(tripId);
+    try {
+      await axios.patch(`${API_URL}/trips/${tripId}/dispatch`, {}, authHeaders());
+      fetchAll();
+    } catch (err) {
+      setActionError((prev) => ({
+        ...prev,
+        [tripId]: err.response?.data?.detail || "Failed to dispatch trip",
+      }));
+    }
   };
 
-  // TODO (Step 16): replace with PATCH /trips/{id}/complete
-  const handleComplete = (tripId) => {
-    setTrips((prev) =>
-      prev.map((t) => (t.id === tripId ? { ...t, status: "Completed", note: "Delivered" } : t))
-    );
+  const openCompleteModal = (trip) => {
+    setCompletingTrip(trip);
+    setCompleteForm(emptyCompleteForm);
+    setCompleteError("");
   };
 
-  // TODO (Step 16): replace with PATCH /trips/{id}/cancel
-  const handleCancel = (tripId) => {
-    setTrips((prev) =>
-      prev.map((t) => (t.id === tripId ? { ...t, status: "Cancelled", note: "Cancelled by dispatcher" } : t))
-    );
+  const handleComplete = async (e) => {
+    e.preventDefault();
+    if (!completingTrip) return;
+    setCompleteError("");
+    try {
+      await axios.patch(
+        `${API_URL}/trips/${completingTrip.id}/complete`,
+        {
+          final_odometer: Number(completeForm.finalOdometer),
+          fuel_consumed_liters: Number(completeForm.fuelConsumed),
+          revenue: Number(completeForm.revenue) || 0,
+        },
+        authHeaders()
+      );
+      setCompletingTrip(null);
+      fetchAll();
+    } catch (err) {
+      setCompleteError(err.response?.data?.detail || "Failed to complete trip");
+    }
+  };
+
+  const handleCancel = async (tripId) => {
+    clearActionError(tripId);
+    try {
+      await axios.patch(`${API_URL}/trips/${tripId}/cancel`, {}, authHeaders());
+      fetchAll();
+    } catch (err) {
+      setActionError((prev) => ({
+        ...prev,
+        [tripId]: err.response?.data?.detail || "Failed to cancel trip",
+      }));
+    }
   };
 
   return (
     <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
       <h1 className="text-xl font-bold mb-1">Trip Dispatcher</h1>
       <p className="text-xs text-gray-400 dark:text-neutral-600 mb-5">
-        Showing mock data — connects to the real trip API once Person A ships it (Step 16).
+        Live trip data from the API.
       </p>
 
       {/* Trip lifecycle stepper */}
@@ -177,6 +224,12 @@ export default function Trips() {
         ))}
       </div>
 
+      {loadError && (
+        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-4">
+          {loadError}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Create Trip form */}
         <div>
@@ -187,6 +240,12 @@ export default function Trips() {
           {!canDispatch && (
             <div className="bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm px-3 py-2 rounded mb-3">
               Your role has view-only access to Trips. Only Dispatcher can create or dispatch trips.
+            </div>
+          )}
+
+          {formError && (
+            <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
+              {formError}
             </div>
           )}
 
@@ -287,10 +346,10 @@ export default function Trips() {
               </button>
               <button
                 type="submit"
-                disabled={!canSubmit}
+                disabled={!canSubmit || submitting}
                 className="px-4 py-2 rounded text-sm bg-accent text-black font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Create Trip (Draft)
+                {submitting ? "Creating..." : "Create Trip (Draft)"}
               </button>
             </div>
           </form>
@@ -299,67 +358,145 @@ export default function Trips() {
         {/* Live Board */}
         <div>
           <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-3">LIVE BOARD</h2>
-          <div className="space-y-3">
-            {trips.map((t) => (
-              <div
-                key={t.id}
-                className="border border-gray-200 dark:border-neutral-800 rounded-lg p-4"
-              >
-                <div className="flex justify-between items-start mb-1">
-                  <span className="text-sm font-semibold">{t.id}</span>
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[t.status]}`}
-                  >
-                    {t.status}
-                  </span>
-                </div>
-                <div className="text-sm text-gray-600 dark:text-neutral-300 mb-1">
-                  {t.source} → {t.destination}
-                </div>
-                <div className="text-xs text-gray-400 dark:text-neutral-500 mb-3">
-                  {t.vehicleName && t.driverName
-                    ? `${t.vehicleName} / ${t.driverName}`
-                    : "Unassigned"}{" "}
-                  · {t.note}
-                </div>
 
-                {canDispatch && (
-                  <div className="flex gap-2">
-                    {t.status === "Draft" && (
-                      <button
-                        onClick={() => handleDispatch(t.id)}
-                        className="text-xs px-3 py-1.5 rounded bg-accent text-black font-semibold hover:opacity-90"
+          {loading && <p className="text-sm text-gray-400">Loading trips...</p>}
+
+          {!loading && (
+            <div className="space-y-3">
+              {trips.map((t) => {
+                const vehicle = vehicleById(t.vehicle_id);
+                const driver = driverById(t.driver_id);
+                return (
+                  <div
+                    key={t.id}
+                    className="border border-gray-200 dark:border-neutral-800 rounded-lg p-4"
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-sm font-semibold">TR{String(t.id).padStart(3, "0")}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[t.status]}`}
                       >
-                        Dispatch
-                      </button>
+                        {t.status}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-neutral-300 mb-1">
+                      {t.source} → {t.destination}
+                    </div>
+                    <div className="text-xs text-gray-400 dark:text-neutral-500 mb-3">
+                      {vehicle && driver ? `${vehicle.name} / ${driver.name}` : "Unassigned"} ·{" "}
+                      {noteForTrip(t)}
+                    </div>
+
+                    {actionError[t.id] && (
+                      <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-xs px-3 py-2 rounded mb-3">
+                        {actionError[t.id]}
+                      </div>
                     )}
-                    {t.status === "Dispatched" && (
-                      <button
-                        onClick={() => handleComplete(t.id)}
-                        className="text-xs px-3 py-1.5 rounded bg-green-600 text-white font-semibold hover:opacity-90"
-                      >
-                        Complete
-                      </button>
-                    )}
-                    {(t.status === "Draft" || t.status === "Dispatched") && (
-                      <button
-                        onClick={() => handleCancel(t.id)}
-                        className="text-xs px-3 py-1.5 rounded border border-gray-300 dark:border-neutral-700"
-                      >
-                        Cancel
-                      </button>
+
+                    {canDispatch && (
+                      <div className="flex gap-2">
+                        {t.status === "Draft" && (
+                          <button
+                            onClick={() => handleDispatch(t.id)}
+                            className="text-xs px-3 py-1.5 rounded bg-accent text-black font-semibold hover:opacity-90"
+                          >
+                            Dispatch
+                          </button>
+                        )}
+                        {t.status === "Dispatched" && (
+                          <button
+                            onClick={() => openCompleteModal(t)}
+                            className="text-xs px-3 py-1.5 rounded bg-green-600 text-white font-semibold hover:opacity-90"
+                          >
+                            Complete
+                          </button>
+                        )}
+                        {(t.status === "Draft" || t.status === "Dispatched") && (
+                          <button
+                            onClick={() => handleCancel(t.id)}
+                            className="text-xs px-3 py-1.5 rounded border border-gray-300 dark:border-neutral-700"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                );
+              })}
+              {trips.length === 0 && (
+                <p className="text-sm text-gray-400 dark:text-neutral-600">No trips yet.</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       <p className="text-xs text-gray-400 dark:text-neutral-600 mt-6">
         Rule: Cargo Weight must not exceed the vehicle's maximum load capacity. Retired/In Shop vehicles and non-Available drivers never appear in the selection pools above.
       </p>
+
+      {/* Complete Trip modal — captures final odometer + fuel consumed */}
+      {completingTrip && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <form
+            onSubmit={handleComplete}
+            className="bg-white dark:bg-neutral-900 rounded-lg p-6 w-96 shadow-xl"
+          >
+            <h2 className="text-lg font-bold mb-4">
+              Complete Trip TR{String(completingTrip.id).padStart(3, "0")}
+            </h2>
+
+            {completeError && (
+              <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
+                {completeError}
+              </div>
+            )}
+
+            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Final Odometer</label>
+            <input
+              required
+              type="number"
+              value={completeForm.finalOdometer}
+              onChange={(e) => setCompleteForm({ ...completeForm, finalOdometer: e.target.value })}
+              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
+            />
+
+            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Fuel Consumed (liters)</label>
+            <input
+              required
+              type="number"
+              value={completeForm.fuelConsumed}
+              onChange={(e) => setCompleteForm({ ...completeForm, fuelConsumed: e.target.value })}
+              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
+            />
+
+            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Revenue (optional)</label>
+            <input
+              type="number"
+              value={completeForm.revenue}
+              onChange={(e) => setCompleteForm({ ...completeForm, revenue: e.target.value })}
+              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-4"
+            />
+
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setCompletingTrip(null)}
+                className="px-4 py-2 rounded text-sm border border-gray-300 dark:border-neutral-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded text-sm bg-accent text-black font-semibold hover:opacity-90"
+              >
+                Mark Completed
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
