@@ -40,7 +40,13 @@ CREATE TABLE vehicles (
         CHECK (status IN ('Available', 'On Trip', 'In Shop', 'Retired')),
     created_at TIMESTAMP DEFAULT NOW()
 );
-
+CREATE TABLE vehicle_documents (
+    id SERIAL PRIMARY KEY,
+    vehicle_id INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+    doc_type VARCHAR(50) NOT NULL,
+    file_url TEXT NOT NULL,
+    uploaded_at TIMESTAMP DEFAULT NOW()
+);
 -- =========================================
 -- 3. DRIVERS
 -- =========================================
@@ -129,3 +135,4 @@ CREATE INDEX idx_maintenance_vehicle_id ON maintenance_logs(vehicle_id);
 CREATE INDEX idx_fuel_logs_vehicle_id ON fuel_logs(vehicle_id);
 CREATE INDEX idx_expenses_vehicle_id ON expenses(vehicle_id);
 CREATE INDEX idx_vehicles_region ON vehicles(region);
+CREATE INDEX idx_vehicle_documents_vehicle_id ON vehicle_documents(vehicle_id);
