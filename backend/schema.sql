@@ -49,6 +49,7 @@ CREATE TABLE drivers (
     name VARCHAR(100) NOT NULL,
     license_number VARCHAR(50) UNIQUE NOT NULL,
     license_category VARCHAR(20) NOT NULL,
+    email VARCHAR(150),
     license_expiry_date DATE NOT NULL,
     contact_number VARCHAR(20) NOT NULL,
     safety_score NUMERIC(5, 2) DEFAULT 100,

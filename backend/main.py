@@ -9,6 +9,7 @@ from fuel_expenses import router as fuel_expenses_router
 from dashboard import router as dashboard_router
 from analytics import router as analytics_router
 from export import router as export_router
+from reminders import router as reminders_router, start_scheduler
 app = FastAPI(title="TransitOps API")
 
 # CORS setup first
@@ -30,6 +31,7 @@ app.include_router(fuel_expenses_router)
 app.include_router(dashboard_router)
 app.include_router(analytics_router)
 app.include_router(export_router)
+app.include_router(reminders_router)
 @app.get("/")
 def read_root():
     return {"message": "TransitOps API is running"}
@@ -38,3 +40,7 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+@app.on_event("startup")
+def _start_reminder_scheduler():
+    start_scheduler()
