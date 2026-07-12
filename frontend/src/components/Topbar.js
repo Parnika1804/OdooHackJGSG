@@ -109,7 +109,7 @@ export default function Topbar({ onOpenMobileNav }) {
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 mt-2 w-48 rounded-md border border-ink-100 dark:border-ink-700 bg-paper-50 dark:bg-ink-900 shadow-popover py-1">
+          <div className="absolute right-0 mt-2 w-48 rounded-md border border-ink-100 dark:border-ink-700 bg-paper-50 dark:bg-ink-900 shadow-popover py-1 origin-top-right animate-drop-in">
             <div className="px-3 py-2 border-b border-ink-100 dark:border-ink-800 md:hidden">
               <div className="text-sm font-semibold text-ink-800 dark:text-ink-100">
                 {name || "User"}

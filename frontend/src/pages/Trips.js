@@ -44,13 +44,22 @@ export default function Trips() {
 
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   // Trip currently being completed (opens the odometer/fuel modal)
   const [completingTrip, setCompletingTrip] = useState(null);
   const [completeForm, setCompleteForm] = useState(emptyCompleteForm);
   const [completeError, setCompleteError] = useState("");
+  const [completeFieldErrors, setCompleteFieldErrors] = useState({});
   const [completing, setCompleting] = useState(false);
+
+  const clearFieldError = (field) => {
+    if (fieldErrors[field]) setFieldErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+  const clearCompleteFieldError = (field) => {
+    if (completeFieldErrors[field]) setCompleteFieldErrors((prev) => ({ ...prev, [field]: "" }));
+  };
 
   // Track per-trip action errors (dispatch/cancel) inline on the card
   const [actionError, setActionError] = useState({});
@@ -118,9 +127,23 @@ export default function Trips() {
     Number(form.plannedDistance) > 0 &&
     !capacityExceeded;
 
+  const validateForm = () => {
+    const errors = {};
+    if (!form.source.trim()) errors.source = "Source is required";
+    if (!form.destination.trim()) errors.destination = "Destination is required";
+    if (!form.vehicleId) errors.vehicleId = "Select a vehicle";
+    if (!form.driverId) errors.driverId = "Select a driver";
+    if (!form.cargoWeight || cargoWeightNum <= 0) errors.cargoWeight = "Enter a weight greater than 0";
+    else if (capacityExceeded) errors.cargoWeight = `Exceeds capacity by ${capacityExceededBy} kg`;
+    if (!form.plannedDistance || Number(form.plannedDistance) <= 0)
+      errors.plannedDistance = "Enter a distance greater than 0";
+    return errors;
+  };
+
   const resetForm = () => {
     setForm(emptyForm);
     setFormError("");
+    setFieldErrors({});
   };
 
   const noteForTrip = (t) => {
@@ -133,7 +156,9 @@ export default function Trips() {
 
   const handleCreateTrip = async (e) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    const errors = validateForm();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSubmitting(true);
     setFormError("");
     try {
@@ -186,11 +211,24 @@ export default function Trips() {
     setCompletingTrip(trip);
     setCompleteForm(emptyCompleteForm);
     setCompleteError("");
+    setCompleteFieldErrors({});
+  };
+
+  const validateCompleteForm = () => {
+    const errors = {};
+    if (!completeForm.finalOdometer || Number(completeForm.finalOdometer) < 0)
+      errors.finalOdometer = "Enter a valid odometer reading";
+    if (!completeForm.fuelConsumed || Number(completeForm.fuelConsumed) < 0)
+      errors.fuelConsumed = "Enter valid fuel consumed";
+    return errors;
   };
 
   const handleComplete = async (e) => {
     e.preventDefault();
     if (!completingTrip) return;
+    const errors = validateCompleteForm();
+    setCompleteFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setCompleteError("");
     setCompleting(true);
     try {
@@ -288,21 +326,33 @@ export default function Trips() {
               <TextField
                 label="Source"
                 value={form.source}
-                onChange={(e) => setForm({ ...form, source: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, source: e.target.value });
+                  clearFieldError("source");
+                }}
                 placeholder="Gandhinagar Depot"
+                error={fieldErrors.source}
               />
 
               <TextField
                 label="Destination"
                 value={form.destination}
-                onChange={(e) => setForm({ ...form, destination: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, destination: e.target.value });
+                  clearFieldError("destination");
+                }}
                 placeholder="Ahmedabad Hub"
+                error={fieldErrors.destination}
               />
 
               <SelectField
                 label="Vehicle (Available only)"
                 value={form.vehicleId}
-                onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, vehicleId: e.target.value });
+                  clearFieldError("vehicleId");
+                }}
+                error={fieldErrors.vehicleId}
               >
                 <option value="">Select vehicle...</option>
                 {availableVehicles.map((v) => (
@@ -315,7 +365,11 @@ export default function Trips() {
               <SelectField
                 label="Driver (Available only)"
                 value={form.driverId}
-                onChange={(e) => setForm({ ...form, driverId: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, driverId: e.target.value });
+                  clearFieldError("driverId");
+                }}
+                error={fieldErrors.driverId}
               >
                 <option value="">Select driver...</option>
                 {availableDrivers.map((d) => (
@@ -329,16 +383,24 @@ export default function Trips() {
                 label="Cargo Weight (kg)"
                 type="number"
                 value={form.cargoWeight}
-                onChange={(e) => setForm({ ...form, cargoWeight: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, cargoWeight: e.target.value });
+                  clearFieldError("cargoWeight");
+                }}
                 placeholder="450"
+                error={fieldErrors.cargoWeight}
               />
 
               <TextField
                 label="Planned Distance (km)"
                 type="number"
                 value={form.plannedDistance}
-                onChange={(e) => setForm({ ...form, plannedDistance: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, plannedDistance: e.target.value });
+                  clearFieldError("plannedDistance");
+                }}
                 placeholder="58"
+                error={fieldErrors.plannedDistance}
               />
 
               {selectedVehicle && (
@@ -463,7 +525,10 @@ export default function Trips() {
       {/* Complete Trip modal — captures final odometer + fuel consumed */}
       <Modal
         open={!!completingTrip}
-        onClose={() => setCompletingTrip(null)}
+        onClose={() => {
+          setCompletingTrip(null);
+          setCompleteFieldErrors({});
+        }}
         title={completingTrip ? `Complete Trip TR${String(completingTrip.id).padStart(3, "0")}` : ""}
         footer={
           <>
@@ -484,7 +549,11 @@ export default function Trips() {
             required
             type="number"
             value={completeForm.finalOdometer}
-            onChange={(e) => setCompleteForm({ ...completeForm, finalOdometer: e.target.value })}
+            onChange={(e) => {
+              setCompleteForm({ ...completeForm, finalOdometer: e.target.value });
+              clearCompleteFieldError("finalOdometer");
+            }}
+            error={completeFieldErrors.finalOdometer}
           />
 
           <TextField
@@ -492,7 +561,11 @@ export default function Trips() {
             required
             type="number"
             value={completeForm.fuelConsumed}
-            onChange={(e) => setCompleteForm({ ...completeForm, fuelConsumed: e.target.value })}
+            onChange={(e) => {
+              setCompleteForm({ ...completeForm, fuelConsumed: e.target.value });
+              clearCompleteFieldError("fuelConsumed");
+            }}
+            error={completeFieldErrors.fuelConsumed}
           />
 
           <TextField

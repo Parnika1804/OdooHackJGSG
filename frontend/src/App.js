@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import ProtectedRoute from "./ProtectedRoute";
@@ -18,13 +18,19 @@ import "./App.css";
 
 function AppLayout({ children }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <div className="flex min-h-screen bg-paper-100 dark:bg-ink-950">
       <Sidebar mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
       <div className="flex-1 min-w-0 flex flex-col">
         <Topbar onOpenMobileNav={() => setMobileNavOpen(true)} />
-        <main className="flex-1 min-w-0">{children}</main>
+        {/* Keying on pathname remounts this wrapper on every navigation, which
+            restarts the fade/slide-up animation — a lightweight page
+            transition without pulling in a routing-transition library. */}
+        <main key={location.pathname} className="flex-1 min-w-0 animate-page-in">
+          {children}
+        </main>
       </div>
     </div>
   );

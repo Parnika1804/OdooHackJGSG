@@ -30,7 +30,7 @@ export default function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-ink-950/50 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-ink-950/50 backdrop-blur-[2px] animate-fade-in"
         onClick={onClose}
         aria-hidden
       />
@@ -38,7 +38,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative w-full ${SIZE_CLASSES[size]} rounded-lg bg-paper-50 dark:bg-ink-900 border border-ink-100 dark:border-ink-800 shadow-popover`}
+        className={`relative w-full ${SIZE_CLASSES[size]} rounded-lg bg-paper-50 dark:bg-ink-900 border border-ink-100 dark:border-ink-800 shadow-popover animate-scale-in`}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100 dark:border-ink-800">
           <h2 className="font-display font-bold text-ink-900 dark:text-paper-50">{title}</h2>

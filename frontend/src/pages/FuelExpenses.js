@@ -40,12 +40,39 @@ export default function FuelExpenses() {
   const [showFuelForm, setShowFuelForm] = useState(false);
   const [fuelForm, setFuelForm] = useState(emptyFuelForm);
   const [fuelFormError, setFuelFormError] = useState("");
+  const [fuelFieldErrors, setFuelFieldErrors] = useState({});
   const [savingFuel, setSavingFuel] = useState(false);
 
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [expenseForm, setExpenseForm] = useState(emptyExpenseForm);
   const [expenseFormError, setExpenseFormError] = useState("");
+  const [expenseFieldErrors, setExpenseFieldErrors] = useState({});
   const [savingExpense, setSavingExpense] = useState(false);
+
+  const clearFuelFieldError = (field) => {
+    if (fuelFieldErrors[field]) setFuelFieldErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+  const clearExpenseFieldError = (field) => {
+    if (expenseFieldErrors[field]) setExpenseFieldErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const validateFuelForm = () => {
+    const errors = {};
+    if (!fuelForm.vehicleId) errors.vehicleId = "Select a vehicle";
+    if (!fuelForm.liters || Number(fuelForm.liters) <= 0) errors.liters = "Enter liters greater than 0";
+    if (fuelForm.cost === "" || Number(fuelForm.cost) < 0) errors.cost = "Enter a valid cost";
+    if (!fuelForm.logDate) errors.logDate = "Date is required";
+    return errors;
+  };
+
+  const validateExpenseForm = () => {
+    const errors = {};
+    if (!expenseForm.vehicleId) errors.vehicleId = "Select a vehicle";
+    if (!expenseForm.expenseType.trim()) errors.expenseType = "Expense type is required";
+    if (!expenseForm.amount || Number(expenseForm.amount) <= 0) errors.amount = "Enter an amount greater than 0";
+    if (!expenseForm.expenseDate) errors.expenseDate = "Date is required";
+    return errors;
+  };
 
   const [costVehicleId, setCostVehicleId] = useState("");
   const [costData, setCostData] = useState(null);
@@ -94,7 +121,9 @@ export default function FuelExpenses() {
 
   const handleLogFuel = async (e) => {
     e.preventDefault();
-    if (!canSubmitFuel) return;
+    const errors = validateFuelForm();
+    setFuelFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSavingFuel(true);
     setFuelFormError("");
     try {
@@ -109,6 +138,7 @@ export default function FuelExpenses() {
         authHeaders()
       );
       setFuelForm(emptyFuelForm);
+      setFuelFieldErrors({});
       setShowFuelForm(false);
       showToast("Fuel entry logged");
       fetchAll();
@@ -128,7 +158,9 @@ export default function FuelExpenses() {
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
-    if (!canSubmitExpense) return;
+    const errors = validateExpenseForm();
+    setExpenseFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSavingExpense(true);
     setExpenseFormError("");
     try {
@@ -143,6 +175,7 @@ export default function FuelExpenses() {
         authHeaders()
       );
       setExpenseForm(emptyExpenseForm);
+      setExpenseFieldErrors({});
       setShowExpenseForm(false);
       showToast("Expense added");
       fetchAll();
@@ -325,6 +358,7 @@ export default function FuelExpenses() {
         onClose={() => {
           setShowFuelForm(false);
           setFuelFormError("");
+          setFuelFieldErrors({});
         }}
         title="Log Fuel"
         footer={
@@ -335,6 +369,7 @@ export default function FuelExpenses() {
               onClick={() => {
                 setShowFuelForm(false);
                 setFuelFormError("");
+                setFuelFieldErrors({});
               }}
             >
               Cancel
@@ -352,7 +387,11 @@ export default function FuelExpenses() {
             label="Vehicle"
             required
             value={fuelForm.vehicleId}
-            onChange={(e) => setFuelForm({ ...fuelForm, vehicleId: e.target.value })}
+            onChange={(e) => {
+              setFuelForm({ ...fuelForm, vehicleId: e.target.value });
+              clearFuelFieldError("vehicleId");
+            }}
+            error={fuelFieldErrors.vehicleId}
           >
             <option value="">Select vehicle...</option>
             {vehicleOptions()}
@@ -363,7 +402,11 @@ export default function FuelExpenses() {
             required
             type="number"
             value={fuelForm.liters}
-            onChange={(e) => setFuelForm({ ...fuelForm, liters: e.target.value })}
+            onChange={(e) => {
+              setFuelForm({ ...fuelForm, liters: e.target.value });
+              clearFuelFieldError("liters");
+            }}
+            error={fuelFieldErrors.liters}
           />
 
           <TextField
@@ -371,7 +414,11 @@ export default function FuelExpenses() {
             required
             type="number"
             value={fuelForm.cost}
-            onChange={(e) => setFuelForm({ ...fuelForm, cost: e.target.value })}
+            onChange={(e) => {
+              setFuelForm({ ...fuelForm, cost: e.target.value });
+              clearFuelFieldError("cost");
+            }}
+            error={fuelFieldErrors.cost}
           />
 
           <TextField
@@ -379,7 +426,11 @@ export default function FuelExpenses() {
             required
             type="date"
             value={fuelForm.logDate}
-            onChange={(e) => setFuelForm({ ...fuelForm, logDate: e.target.value })}
+            onChange={(e) => {
+              setFuelForm({ ...fuelForm, logDate: e.target.value });
+              clearFuelFieldError("logDate");
+            }}
+            error={fuelFieldErrors.logDate}
             wrapperClassName="mb-0"
           />
         </form>
@@ -391,6 +442,7 @@ export default function FuelExpenses() {
         onClose={() => {
           setShowExpenseForm(false);
           setExpenseFormError("");
+          setExpenseFieldErrors({});
         }}
         title="Add Expense"
         footer={
@@ -401,6 +453,7 @@ export default function FuelExpenses() {
               onClick={() => {
                 setShowExpenseForm(false);
                 setExpenseFormError("");
+                setExpenseFieldErrors({});
               }}
             >
               Cancel
@@ -418,7 +471,11 @@ export default function FuelExpenses() {
             label="Vehicle"
             required
             value={expenseForm.vehicleId}
-            onChange={(e) => setExpenseForm({ ...expenseForm, vehicleId: e.target.value })}
+            onChange={(e) => {
+              setExpenseForm({ ...expenseForm, vehicleId: e.target.value });
+              clearExpenseFieldError("vehicleId");
+            }}
+            error={expenseFieldErrors.vehicleId}
           >
             <option value="">Select vehicle...</option>
             {vehicleOptions()}
@@ -429,7 +486,11 @@ export default function FuelExpenses() {
             required
             placeholder="Toll"
             value={expenseForm.expenseType}
-            onChange={(e) => setExpenseForm({ ...expenseForm, expenseType: e.target.value })}
+            onChange={(e) => {
+              setExpenseForm({ ...expenseForm, expenseType: e.target.value });
+              clearExpenseFieldError("expenseType");
+            }}
+            error={expenseFieldErrors.expenseType}
           />
 
           <TextField
@@ -437,7 +498,11 @@ export default function FuelExpenses() {
             required
             type="number"
             value={expenseForm.amount}
-            onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+            onChange={(e) => {
+              setExpenseForm({ ...expenseForm, amount: e.target.value });
+              clearExpenseFieldError("amount");
+            }}
+            error={expenseFieldErrors.amount}
           />
 
           <TextField
@@ -445,7 +510,11 @@ export default function FuelExpenses() {
             required
             type="date"
             value={expenseForm.expenseDate}
-            onChange={(e) => setExpenseForm({ ...expenseForm, expenseDate: e.target.value })}
+            onChange={(e) => {
+              setExpenseForm({ ...expenseForm, expenseDate: e.target.value });
+              clearExpenseFieldError("expenseDate");
+            }}
+            error={expenseFieldErrors.expenseDate}
             wrapperClassName="mb-0"
           />
         </form>

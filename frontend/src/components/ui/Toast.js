@@ -37,7 +37,7 @@ export function ToastProvider({ children }) {
             <div
               key={toast.id}
               role="status"
-              className={`flex items-start gap-2 rounded-md border bg-paper-50 dark:bg-ink-900 shadow-popover px-3 py-2.5 text-sm ${classes}`}
+              className={`flex items-start gap-2 rounded-md border bg-paper-50 dark:bg-ink-900 shadow-popover px-3 py-2.5 text-sm animate-toast-in ${classes}`}
             >
               <Icon size={16} className="mt-0.5 shrink-0" />
               <span className="flex-1 text-ink-800 dark:text-ink-100">{toast.message}</span>

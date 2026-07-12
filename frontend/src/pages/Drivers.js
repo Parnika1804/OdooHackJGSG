@@ -63,8 +63,24 @@ export default function Drivers() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  const clearFieldError = (field) => {
+    if (fieldErrors[field]) setFieldErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!form.name.trim()) errors.name = "Name is required";
+    if (!form.license_number.trim()) errors.license_number = "License number is required";
+    if (!form.license_expiry_date) errors.license_expiry_date = "Expiry date is required";
+    if (!form.contact_number.trim()) errors.contact_number = "Contact number is required";
+    else if (!/^\+?[0-9\s-]{7,15}$/.test(form.contact_number.trim()))
+      errors.contact_number = "Enter a valid phone number";
+    return errors;
+  };
 
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -136,6 +152,9 @@ export default function Drivers() {
   const handleAddDriver = async (e) => {
     e.preventDefault();
     setFormError("");
+    const errors = validateForm();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSubmitting(true);
     try {
       await axios.post(
@@ -147,6 +166,7 @@ export default function Drivers() {
         authHeaders()
       );
       setForm(emptyForm);
+      setFieldErrors({});
       setShowForm(false);
       showToast(`${form.name || "Driver"} added to the roster`);
       fetchDrivers();
@@ -276,6 +296,7 @@ export default function Drivers() {
         onClose={() => {
           setShowForm(false);
           setFormError("");
+          setFieldErrors({});
         }}
         title="Add Driver"
         footer={
@@ -286,6 +307,7 @@ export default function Drivers() {
               onClick={() => {
                 setShowForm(false);
                 setFormError("");
+                setFieldErrors({});
               }}
             >
               Cancel
@@ -303,14 +325,22 @@ export default function Drivers() {
             label="Name"
             required
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, name: e.target.value });
+              clearFieldError("name");
+            }}
+            error={fieldErrors.name}
           />
 
           <TextField
             label="License Number"
             required
             value={form.license_number}
-            onChange={(e) => setForm({ ...form, license_number: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, license_number: e.target.value });
+              clearFieldError("license_number");
+            }}
+            error={fieldErrors.license_number}
           />
 
           <SelectField
@@ -327,14 +357,22 @@ export default function Drivers() {
             required
             type="date"
             value={form.license_expiry_date}
-            onChange={(e) => setForm({ ...form, license_expiry_date: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, license_expiry_date: e.target.value });
+              clearFieldError("license_expiry_date");
+            }}
+            error={fieldErrors.license_expiry_date}
           />
 
           <TextField
             label="Contact Number"
             required
             value={form.contact_number}
-            onChange={(e) => setForm({ ...form, contact_number: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, contact_number: e.target.value });
+              clearFieldError("contact_number");
+            }}
+            error={fieldErrors.contact_number}
             wrapperClassName="mb-0"
           />
         </form>

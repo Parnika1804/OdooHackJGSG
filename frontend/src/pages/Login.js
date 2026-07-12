@@ -14,17 +14,32 @@ const roleRoutes = {
   "Financial Analyst": "/fuel-expenses",
 };
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  const validate = () => {
+    const errors = {};
+    if (!email.trim()) errors.email = "Email is required";
+    else if (!EMAIL_PATTERN.test(email.trim())) errors.email = "Enter a valid email address";
+    if (!password) errors.password = "Password is required";
+    return errors;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     setSubmitting(true);
     try {
       const res = await axios.post(`${API_URL}/login`, { email, password });
@@ -47,7 +62,7 @@ export default function Login() {
       <AuthBrandPanel />
 
       <div className="flex-1 flex items-center justify-center p-6">
-        <form onSubmit={handleSubmit} className="w-full max-w-sm">
+        <form onSubmit={handleSubmit} className="w-full max-w-sm" noValidate>
           <h2 className="font-display text-xl font-bold text-ink-900 dark:text-paper-50">
             Sign in to your account
           </h2>
@@ -59,18 +74,26 @@ export default function Login() {
             label="Email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: "" });
+            }}
             placeholder="you@transitops.io"
             required
+            error={fieldErrors.email}
           />
 
           <TextField
             label="Password"
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: "" });
+            }}
             placeholder="••••••••"
             required
+            error={fieldErrors.password}
             wrapperClassName="mb-0"
           />
 
@@ -84,7 +107,7 @@ export default function Login() {
               />
               Remember me
             </label>
-            <a href="#forgot" className="text-signal-600 dark:text-signal-300 font-medium">
+            <a href="#forgot" className="text-signal-600 dark:text-signal-300 font-medium hover:text-signal-500 dark:hover:text-signal-200 transition-colors">
               Forgot password?
             </a>
           </div>
@@ -95,7 +118,7 @@ export default function Login() {
 
           <p className="text-sm text-ink-400 mt-4 text-center">
             Don't have an account?{" "}
-            <Link to="/signup" className="text-signal-600 dark:text-signal-300 font-medium">
+            <Link to="/signup" className="text-signal-600 dark:text-signal-300 font-medium hover:text-signal-500 dark:hover:text-signal-200 transition-colors">
               Create one
             </Link>
           </p>

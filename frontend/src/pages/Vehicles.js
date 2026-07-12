@@ -40,8 +40,24 @@ export default function Vehicles() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  const clearFieldError = (field) => {
+    if (fieldErrors[field]) setFieldErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!form.registration_number.trim()) errors.registration_number = "Registration number is required";
+    if (!form.name.trim()) errors.name = "Name / model is required";
+    if (!form.max_load_capacity_kg) errors.max_load_capacity_kg = "Capacity is required";
+    else if (Number(form.max_load_capacity_kg) <= 0) errors.max_load_capacity_kg = "Must be greater than 0";
+    if (!form.acquisition_cost) errors.acquisition_cost = "Acquisition cost is required";
+    else if (Number(form.acquisition_cost) < 0) errors.acquisition_cost = "Cannot be negative";
+    return errors;
+  };
 
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -113,6 +129,9 @@ export default function Vehicles() {
   const handleAddVehicle = async (e) => {
     e.preventDefault();
     setFormError("");
+    const errors = validateForm();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSubmitting(true);
     try {
       await axios.post(
@@ -125,6 +144,7 @@ export default function Vehicles() {
         authHeaders()
       );
       setForm(emptyForm);
+      setFieldErrors({});
       setShowForm(false);
       showToast(`${form.name || "Vehicle"} added to the registry`);
       fetchVehicles();
@@ -243,6 +263,7 @@ export default function Vehicles() {
         onClose={() => {
           setShowForm(false);
           setFormError("");
+          setFieldErrors({});
         }}
         title="Add Vehicle"
         footer={
@@ -253,6 +274,7 @@ export default function Vehicles() {
               onClick={() => {
                 setShowForm(false);
                 setFormError("");
+                setFieldErrors({});
               }}
             >
               Cancel
@@ -270,14 +292,22 @@ export default function Vehicles() {
             label="Registration Number"
             required
             value={form.registration_number}
-            onChange={(e) => setForm({ ...form, registration_number: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, registration_number: e.target.value });
+              clearFieldError("registration_number");
+            }}
+            error={fieldErrors.registration_number}
           />
 
           <TextField
             label="Name / Model"
             required
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, name: e.target.value });
+              clearFieldError("name");
+            }}
+            error={fieldErrors.name}
           />
 
           <SelectField
@@ -295,7 +325,11 @@ export default function Vehicles() {
             required
             type="number"
             value={form.max_load_capacity_kg}
-            onChange={(e) => setForm({ ...form, max_load_capacity_kg: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, max_load_capacity_kg: e.target.value });
+              clearFieldError("max_load_capacity_kg");
+            }}
+            error={fieldErrors.max_load_capacity_kg}
           />
 
           <TextField
@@ -303,7 +337,11 @@ export default function Vehicles() {
             required
             type="number"
             value={form.acquisition_cost}
-            onChange={(e) => setForm({ ...form, acquisition_cost: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, acquisition_cost: e.target.value });
+              clearFieldError("acquisition_cost");
+            }}
+            error={fieldErrors.acquisition_cost}
             wrapperClassName="mb-0"
           />
         </form>

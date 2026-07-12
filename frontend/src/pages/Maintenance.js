@@ -30,9 +30,23 @@ export default function Maintenance() {
 
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   const [closingId, setClosingId] = useState(null);
+
+  const clearFieldError = (field) => {
+    if (fieldErrors[field]) setFieldErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!form.vehicleId) errors.vehicleId = "Select a vehicle";
+    if (!form.serviceType.trim()) errors.serviceType = "Service type is required";
+    if (form.cost === "" || Number(form.cost) < 0) errors.cost = "Enter a valid cost";
+    if (!form.serviceDate) errors.serviceDate = "Date is required";
+    return errors;
+  };
 
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -71,6 +85,7 @@ export default function Maintenance() {
   const resetForm = () => {
     setForm(emptyForm);
     setFormError("");
+    setFieldErrors({});
   };
 
   const canSubmit =
@@ -78,7 +93,9 @@ export default function Maintenance() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    const errors = validateForm();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSubmitting(true);
     setFormError("");
     try {
@@ -199,7 +216,11 @@ export default function Maintenance() {
             <SelectField
               label="Vehicle"
               value={form.vehicleId}
-              onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, vehicleId: e.target.value });
+                clearFieldError("vehicleId");
+              }}
+              error={fieldErrors.vehicleId}
             >
               <option value="">Select vehicle...</option>
               {eligibleVehicles.map((v) => (
@@ -213,7 +234,11 @@ export default function Maintenance() {
               label="Service Type"
               placeholder="Oil Change"
               value={form.serviceType}
-              onChange={(e) => setForm({ ...form, serviceType: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, serviceType: e.target.value });
+                clearFieldError("serviceType");
+              }}
+              error={fieldErrors.serviceType}
             />
 
             <TextField
@@ -221,14 +246,22 @@ export default function Maintenance() {
               type="number"
               placeholder="2500"
               value={form.cost}
-              onChange={(e) => setForm({ ...form, cost: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, cost: e.target.value });
+                clearFieldError("cost");
+              }}
+              error={fieldErrors.cost}
             />
 
             <TextField
               label="Date"
               type="date"
               value={form.serviceDate}
-              onChange={(e) => setForm({ ...form, serviceDate: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, serviceDate: e.target.value });
+                clearFieldError("serviceDate");
+              }}
+              error={fieldErrors.serviceDate}
             />
 
             <div className="flex gap-2 justify-end mt-1">

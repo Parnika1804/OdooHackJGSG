@@ -90,6 +90,35 @@ module.exports = {
       transitionTimingFunction: {
         snappy: "cubic-bezier(0.2, 0.8, 0.2, 1)",
       },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        scaleIn: {
+          "0%": { opacity: "0", transform: "scale(0.96) translateY(4px)" },
+          "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+        },
+        dropIn: {
+          "0%": { opacity: "0", transform: "translateY(-6px) scale(0.98)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        toastIn: {
+          "0%": { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        pageIn: {
+          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        "fade-in": "fadeIn 150ms ease-out",
+        "scale-in": "scaleIn 160ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "drop-in": "dropIn 140ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "toast-in": "toastIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "page-in": "pageIn 200ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+      },
     },
   },
   plugins: [],

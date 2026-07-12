@@ -16,6 +16,8 @@ const roleRoutes = {
   "Financial Analyst": "/fuel-expenses",
 };
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function Signup() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
@@ -23,11 +25,30 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState(ROLES[0]);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  const clearFieldError = (field) => {
+    if (fieldErrors[field]) setFieldErrors({ ...fieldErrors, [field]: "" });
+  };
+
+  const validate = () => {
+    const errors = {};
+    if (!name.trim()) errors.name = "Name is required";
+    if (!email.trim()) errors.email = "Email is required";
+    else if (!EMAIL_PATTERN.test(email.trim())) errors.email = "Enter a valid email address";
+    if (!password) errors.password = "Password is required";
+    else if (password.length < 6) errors.password = "Password must be at least 6 characters";
+    return errors;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     setSubmitting(true);
     try {
       const res = await axios.post(`${API_URL}/signup`, { name, email, password, role });
@@ -50,7 +71,7 @@ export default function Signup() {
       <AuthBrandPanel />
 
       <div className="flex-1 flex items-center justify-center p-6">
-        <form onSubmit={handleSubmit} className="w-full max-w-sm">
+        <form onSubmit={handleSubmit} className="w-full max-w-sm" noValidate>
           <h2 className="font-display text-xl font-bold text-ink-900 dark:text-paper-50">
             Create your account
           </h2>
@@ -61,28 +82,40 @@ export default function Signup() {
           <TextField
             label="Name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              clearFieldError("name");
+            }}
             placeholder="Ravan K."
             required
+            error={fieldErrors.name}
           />
 
           <TextField
             label="Email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearFieldError("email");
+            }}
             placeholder="you@transitops.io"
             required
+            error={fieldErrors.email}
           />
 
           <TextField
             label="Password"
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              clearFieldError("password");
+            }}
             placeholder="••••••••"
             required
             minLength={6}
+            error={fieldErrors.password}
           />
 
           <SelectField
@@ -104,7 +137,7 @@ export default function Signup() {
 
           <p className="text-sm text-ink-400 mt-4 text-center">
             Already have an account?{" "}
-            <Link to="/" className="text-signal-600 dark:text-signal-300 font-medium">
+            <Link to="/" className="text-signal-600 dark:text-signal-300 font-medium hover:text-signal-500 dark:hover:text-signal-200 transition-colors">
               Sign in
             </Link>
           </p>
