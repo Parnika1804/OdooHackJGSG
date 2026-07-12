@@ -41,7 +41,7 @@ export default function Topbar({ onOpenMobileNav }) {
 
   const handleLogout = () => {
     clearSession();
-    navigate("/");
+    navigate("/login");
   };
 
   return (
