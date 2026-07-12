@@ -247,3 +247,202 @@ def delete_trip(
         conn.commit()
 
     return {"message": f"Trip {trip_id} deleted successfully"}
+from pydantic import BaseModel
+from typing import Optional
+
+
+# ---------- Additional Schemas ----------
+class TripComplete(BaseModel):
+    final_odometer: float
+    fuel_consumed_liters: float
+    revenue: Optional[float] = 0
+
+
+# ---------- Status Transition Routes ----------
+
+@router.patch("/{trip_id}/dispatch")
+def dispatch_trip(
+    trip_id: int,
+    user: dict = Depends(require_role("Fleet Manager", "Dispatcher"))
+):
+    """Move trip from Draft to Dispatched. Sets vehicle+driver status to On Trip."""
+    with engine.connect() as conn:
+        trip = conn.execute(
+            text("SELECT * FROM trips WHERE id = :id"),
+            {"id": trip_id}
+        ).fetchone()
+
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        if trip.status != "Draft":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only Draft trips can be dispatched (current status: {trip.status})"
+            )
+
+        if not trip.vehicle_id or not trip.driver_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Trip must have both a vehicle and driver assigned before dispatch"
+            )
+
+        # Re-check vehicle/driver are still valid at dispatch time
+        vehicle = conn.execute(
+            text("SELECT * FROM vehicles WHERE id = :id"),
+            {"id": trip.vehicle_id}
+        ).fetchone()
+        driver = conn.execute(
+            text("SELECT * FROM drivers WHERE id = :id"),
+            {"id": trip.driver_id}
+        ).fetchone()
+
+        if vehicle.status in ("Retired", "In Shop", "On Trip"):
+            raise HTTPException(status_code=400, detail=f"Vehicle is {vehicle.status}, cannot dispatch")
+
+        if driver.status in ("Suspended", "On Trip"):
+            raise HTTPException(status_code=400, detail=f"Driver is {driver.status}, cannot dispatch")
+
+        from datetime import date
+        if driver.license_expiry_date < date.today():
+            raise HTTPException(status_code=400, detail="Driver's license has expired")
+
+        # Update trip status
+        result = conn.execute(
+            text("""
+                UPDATE trips
+                SET status = 'Dispatched', dispatched_at = NOW()
+                WHERE id = :id
+                RETURNING *
+            """),
+            {"id": trip_id}
+        )
+        updated_trip = result.fetchone()
+
+        # Update vehicle and driver status to On Trip
+        conn.execute(
+            text("UPDATE vehicles SET status = 'On Trip' WHERE id = :id"),
+            {"id": trip.vehicle_id}
+        )
+        conn.execute(
+            text("UPDATE drivers SET status = 'On Trip' WHERE id = :id"),
+            {"id": trip.driver_id}
+        )
+        conn.commit()
+
+    return dict(updated_trip._mapping)
+
+
+@router.patch("/{trip_id}/complete")
+def complete_trip(
+    trip_id: int,
+    data: TripComplete,
+    user: dict = Depends(require_role("Fleet Manager", "Dispatcher"))
+):
+    """Move trip from Dispatched to Completed. Captures final odometer + fuel, sets vehicle+driver to Available."""
+    with engine.connect() as conn:
+        trip = conn.execute(
+            text("SELECT * FROM trips WHERE id = :id"),
+            {"id": trip_id}
+        ).fetchone()
+
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        if trip.status != "Dispatched":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only Dispatched trips can be completed (current status: {trip.status})"
+            )
+
+        result = conn.execute(
+            text("""
+                UPDATE trips
+                SET status = 'Completed',
+                    final_odometer = :final_odometer,
+                    fuel_consumed_liters = :fuel_consumed_liters,
+                    revenue = :revenue,
+                    completed_at = NOW()
+                WHERE id = :id
+                RETURNING *
+            """),
+            {
+                "id": trip_id,
+                "final_odometer": data.final_odometer,
+                "fuel_consumed_liters": data.fuel_consumed_liters,
+                "revenue": data.revenue
+            }
+        )
+        updated_trip = result.fetchone()
+
+        # Update vehicle odometer + status back to Available
+        conn.execute(
+            text("""
+                UPDATE vehicles
+                SET status = 'Available', odometer = :final_odometer
+                WHERE id = :id
+            """),
+            {"id": trip.vehicle_id, "final_odometer": data.final_odometer}
+        )
+        # Driver back to Available
+        conn.execute(
+            text("UPDATE drivers SET status = 'Available' WHERE id = :id"),
+            {"id": trip.driver_id}
+        )
+        conn.commit()
+
+    return dict(updated_trip._mapping)
+
+
+@router.patch("/{trip_id}/cancel")
+def cancel_trip(
+    trip_id: int,
+    user: dict = Depends(require_role("Fleet Manager", "Dispatcher"))
+):
+    """Cancel a trip. Restores vehicle+driver status to Available (if they were On Trip)."""
+    with engine.connect() as conn:
+        trip = conn.execute(
+            text("SELECT * FROM trips WHERE id = :id"),
+            {"id": trip_id}
+        ).fetchone()
+
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        if trip.status in ("Completed", "Cancelled"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel a trip that is already {trip.status}"
+            )
+
+        result = conn.execute(
+            text("""
+                UPDATE trips
+                SET status = 'Cancelled'
+                WHERE id = :id
+                RETURNING *
+            """),
+            {"id": trip_id}
+        )
+        updated_trip = result.fetchone()
+
+        # Restore vehicle + driver to Available if they were On Trip
+        if trip.vehicle_id:
+            conn.execute(
+                text("""
+                    UPDATE vehicles SET status = 'Available'
+                    WHERE id = :id AND status = 'On Trip'
+                """),
+                {"id": trip.vehicle_id}
+            )
+        if trip.driver_id:
+            conn.execute(
+                text("""
+                    UPDATE drivers SET status = 'Available'
+                    WHERE id = :id AND status = 'On Trip'
+                """),
+                {"id": trip.driver_id}
+            )
+        conn.commit()
+
+    return dict(updated_trip._mapping)
