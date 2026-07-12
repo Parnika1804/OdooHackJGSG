@@ -59,9 +59,9 @@ def get_driver(driver_id: int, user: dict = Depends(get_current_user)):
 @router.post("")
 def create_driver(
     data: DriverCreate,
-    user: dict = Depends(require_role("Fleet Manager"))
+    user: dict = Depends(require_role("Safety Officer"))
 ):
-    """Only Fleet Manager can register a new driver."""
+    """Only Safety Officer can register a new driver (per RBAC matrix: Safety Officer owns Drivers/Compliance)."""
     if data.status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Status must be one of {VALID_STATUSES}")
 
@@ -100,9 +100,9 @@ def create_driver(
 def update_driver(
     driver_id: int,
     data: DriverUpdate,
-    user: dict = Depends(require_role("Fleet Manager"))
+    user: dict = Depends(require_role("Safety Officer"))
 ):
-    """Only Fleet Manager can update a driver."""
+    """Only Safety Officer can update a driver (per RBAC matrix)."""
     if data.status and data.status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Status must be one of {VALID_STATUSES}")
 
@@ -136,9 +136,9 @@ def update_driver(
 @router.delete("/{driver_id}")
 def delete_driver(
     driver_id: int,
-    user: dict = Depends(require_role("Fleet Manager"))
+    user: dict = Depends(require_role("Safety Officer"))
 ):
-    """Only Fleet Manager can delete a driver."""
+    """Only Safety Officer can delete a driver (per RBAC matrix)."""
     with engine.connect() as conn:
         existing = conn.execute(
             text("SELECT id FROM drivers WHERE id = :id"),

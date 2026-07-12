@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { API_URL } from "../config";
+import { canManage } from "../permissions";
 
 const statusStyles = {
   Available: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
@@ -17,11 +19,9 @@ const emptyForm = {
   status: "Available",
 };
 
-const API_URL = "http://localhost:8000";
-
 export default function Vehicles() {
   const role = localStorage.getItem("role");
-  const canManageVehicles = role === "Fleet Manager";
+  const canManageVehicles = canManage("vehicles", role);
 
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);

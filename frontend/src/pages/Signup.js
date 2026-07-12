@@ -3,27 +3,34 @@ import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { API_URL } from "../config";
 
+const ROLES = ["Fleet Manager", "Dispatcher", "Safety Officer", "Financial Analyst"];
+
 const roleRoutes = {
   "Fleet Manager": "/vehicles",
-  "Dispatcher": "/dashboard",
+  Dispatcher: "/dashboard",
   "Safety Officer": "/drivers",
   "Financial Analyst": "/fuel-expenses",
 };
 
-export default function Login() {
+export default function Signup() {
   const navigate = useNavigate();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
+  const [role, setRole] = useState(ROLES[0]);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
     try {
-      const res = await axios.post(`${API_URL}/login`, {
+      const res = await axios.post(`${API_URL}/signup`, {
+        name,
         email,
         password,
+        role,
       });
 
       const { access_token, user } = res.data;
@@ -33,7 +40,9 @@ export default function Login() {
 
       navigate(roleRoutes[user.role] || "/dashboard");
     } catch (err) {
-      setError(err.response?.data?.detail || "Invalid email or password");
+      setError(err.response?.data?.detail || "Could not create account");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -51,20 +60,9 @@ export default function Login() {
         <div>
           <h4 className="font-semibold mb-2">One login, four roles:</h4>
           <ul className="text-sm space-y-1 list-disc list-inside">
-            <li>Fleet Manager</li>
-            <li>Dispatcher</li>
-            <li>Safety Officer</li>
-            <li>Financial Analyst</li>
-          </ul>
-        </div>
-
-        <div className="text-sm text-gray-600 dark:text-neutral-400">
-          <p className="mb-2">Access is scoped by role after login:</p>
-          <ul className="space-y-1">
-            <li>Fleet Manager → Fleet, Maintenance</li>
-            <li>Dispatcher → Dashboard, Trips</li>
-            <li>Safety Officer → Drivers, Compliance</li>
-            <li>Financial Analyst → Fuel & Expenses, Analytics</li>
+            {ROLES.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
           </ul>
         </div>
 
@@ -76,10 +74,10 @@ export default function Login() {
       <div className="flex-1 bg-white dark:bg-neutral-950 flex items-center justify-center">
         <form onSubmit={handleSubmit} className="w-80">
           <h2 className="text-xl font-bold text-gray-900 dark:text-neutral-100">
-            Sign in to your account
+            Create your account
           </h2>
           <p className="text-sm text-gray-500 dark:text-neutral-400 mb-5">
-            Enter your credentials to continue
+            Sign up and pick your role to get started
           </p>
 
           {error && (
@@ -87,6 +85,18 @@ export default function Login() {
               {error}
             </div>
           )}
+
+          <label className="block text-sm text-gray-600 dark:text-neutral-300 mt-3 mb-1">
+            Name
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ravan K."
+            required
+            className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 rounded px-3 py-2 text-sm"
+          />
 
           <label className="block text-sm text-gray-600 dark:text-neutral-300 mt-3 mb-1">
             Email
@@ -109,32 +119,37 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             required
+            minLength={6}
             className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 rounded px-3 py-2 text-sm"
           />
 
-          <div className="flex justify-between items-center mt-4 text-sm">
-            <label className="flex items-center gap-2 text-gray-600 dark:text-neutral-300">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-              />
-              Remember me
-            </label>
-            <a href="#forgot" className="text-accent">Forgot password?</a>
-          </div>
+          <label className="block text-sm text-gray-600 dark:text-neutral-300 mt-3 mb-1">
+            Role (RBAC)
+          </label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 rounded px-3 py-2 text-sm"
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
 
           <button
             type="submit"
-            className="w-full mt-5 bg-accent text-black font-semibold rounded py-2.5 text-sm hover:opacity-90"
+            disabled={submitting}
+            className="w-full mt-5 bg-accent text-black font-semibold rounded py-2.5 text-sm hover:opacity-90 disabled:opacity-60"
           >
-            Sign In
+            {submitting ? "Creating account..." : "Create Account"}
           </button>
 
           <p className="text-sm text-gray-500 dark:text-neutral-400 mt-4 text-center">
-            Don't have an account?{" "}
-            <Link to="/signup" className="text-accent font-medium">
-              Create one
+            Already have an account?{" "}
+            <Link to="/" className="text-accent font-medium">
+              Sign in
             </Link>
           </p>
         </form>
