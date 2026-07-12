@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Plus, Download, Search } from "lucide-react";
+import { Plus, Download, Search, FileText } from "lucide-react";
 import { API_URL } from "../config";
 import { canManage } from "../permissions";
 import { downloadCsv } from "../utils/exportCsv";
@@ -11,6 +11,7 @@ import Modal from "../components/ui/Modal";
 import Alert from "../components/ui/Alert";
 import { StatusBadge } from "../components/ui/Badge";
 import { TextField, SelectField } from "../components/ui/FormField";
+import VehicleDocumentsModal from "../components/VehicleDocumentsModal";
 
 const emptyForm = {
   registration_number: "",
@@ -42,6 +43,7 @@ export default function Vehicles() {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [docsVehicle, setDocsVehicle] = useState(null);
 
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -165,6 +167,20 @@ export default function Vehicles() {
       label: "Status",
       sortable: true,
       render: (v) => <StatusBadge status={v.status} />,
+    },
+    {
+      key: "documents",
+      label: "Docs",
+      render: (v) => (
+        <button
+          type="button"
+          onClick={() => setDocsVehicle(v)}
+          className="text-ink-400 hover:text-signal-500"
+          title="View documents"
+        >
+          <FileText size={16} />
+        </button>
+      ),
     },
   ];
 
@@ -308,6 +324,13 @@ export default function Vehicles() {
           />
         </form>
       </Modal>
+
+      <VehicleDocumentsModal
+        vehicle={docsVehicle}
+        open={!!docsVehicle}
+        onClose={() => setDocsVehicle(null)}
+        canManage={canManageVehicles}
+      />
     </div>
   );
 }

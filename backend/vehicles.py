@@ -4,6 +4,9 @@ from typing import Optional
 from sqlalchemy import text
 from database import engine
 from rbac import get_current_user, require_role
+import uuid
+from fastapi import UploadFile, File, Form
+from storage import supabase, DOCUMENTS_BUCKET
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
@@ -153,3 +156,91 @@ def delete_vehicle(
         conn.commit()
 
     return {"message": f"Vehicle {vehicle_id} deleted successfully"}
+@router.post("/{vehicle_id}/documents")
+def upload_vehicle_document(
+    vehicle_id: int,
+    doc_type: str = Form(...),
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role("Fleet Manager"))
+):
+    """Only Fleet Manager can upload vehicle documents (RC, insurance, permit, etc.)."""
+    with engine.connect() as conn:
+        vehicle = conn.execute(
+            text("SELECT id FROM vehicles WHERE id = :id"),
+            {"id": vehicle_id}
+        ).fetchone()
+ 
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+ 
+    file_bytes = file.file.read()
+    ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
+    storage_path = f"{vehicle_id}/{uuid.uuid4()}.{ext}"
+ 
+    try:
+        supabase.storage.from_(DOCUMENTS_BUCKET).upload(
+            storage_path, file_bytes,
+            {"content-type": file.content_type or "application/octet-stream"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+ 
+    file_url = supabase.storage.from_(DOCUMENTS_BUCKET).get_public_url(storage_path)
+ 
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                INSERT INTO vehicle_documents (vehicle_id, doc_type, file_url)
+                VALUES (:vehicle_id, :doc_type, :file_url)
+                RETURNING *
+            """),
+            {"vehicle_id": vehicle_id, "doc_type": doc_type, "file_url": file_url}
+        )
+        conn.commit()
+        new_doc = result.fetchone()
+ 
+    return dict(new_doc._mapping)
+ 
+ 
+@router.get("/{vehicle_id}/documents")
+def get_vehicle_documents(vehicle_id: int, user: dict = Depends(get_current_user)):
+    """Any authenticated user can view a vehicle's documents."""
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT * FROM vehicle_documents WHERE vehicle_id = :vehicle_id ORDER BY uploaded_at DESC"),
+            {"vehicle_id": vehicle_id}
+        )
+        documents = [dict(row._mapping) for row in result]
+ 
+    return {"documents": documents}
+ 
+ 
+@router.delete("/{vehicle_id}/documents/{doc_id}")
+def delete_vehicle_document(
+    vehicle_id: int,
+    doc_id: int,
+    user: dict = Depends(require_role("Fleet Manager"))
+):
+    """Only Fleet Manager can delete vehicle documents."""
+    with engine.connect() as conn:
+        doc = conn.execute(
+            text("SELECT * FROM vehicle_documents WHERE id = :id AND vehicle_id = :vehicle_id"),
+            {"id": doc_id, "vehicle_id": vehicle_id}
+        ).fetchone()
+ 
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+ 
+    file_url = doc._mapping["file_url"]
+    storage_path = file_url.split(f"{DOCUMENTS_BUCKET}/")[-1]
+ 
+    try:
+        supabase.storage.from_(DOCUMENTS_BUCKET).remove([storage_path])
+    except Exception:
+        pass  # file may already be gone from storage; still clean up the DB row
+ 
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM vehicle_documents WHERE id = :id"), {"id": doc_id})
+        conn.commit()
+ 
+    return {"message": f"Document {doc_id} deleted successfully"}
