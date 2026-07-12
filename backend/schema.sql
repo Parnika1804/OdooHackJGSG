@@ -159,3 +159,31 @@ CREATE TRIGGER trg_enforce_cargo_capacity
 BEFORE INSERT OR UPDATE ON trips
 FOR EACH ROW
 EXECUTE FUNCTION enforce_cargo_capacity();
+-- =========================================
+-- Trigger: prevent dispatching unavailable vehicle/driver
+-- =========================================
+CREATE OR REPLACE FUNCTION validate_dispatch()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_status TEXT;
+  d_status TEXT;
+BEGIN
+  IF NEW.status = 'Dispatched' THEN
+    SELECT status INTO v_status FROM vehicles WHERE id = NEW.vehicle_id;
+    SELECT status INTO d_status FROM drivers WHERE id = NEW.driver_id;
+
+    IF v_status IN ('Retired', 'In Shop', 'On Trip') THEN
+      RAISE EXCEPTION 'Vehicle is not available for dispatch (status: %)', v_status;
+    END IF;
+    IF d_status IN ('Suspended', 'Off Duty', 'On Trip') THEN
+      RAISE EXCEPTION 'Driver is not available for dispatch (status: %)', d_status;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_validate_dispatch
+BEFORE UPDATE ON trips
+FOR EACH ROW
+EXECUTE FUNCTION validate_dispatch();
