@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { Plus, Download, Search } from "lucide-react";
 import { API_URL } from "../config";
 import { canManage } from "../permissions";
 import { downloadCsv } from "../utils/exportCsv";
-
-const statusStyles = {
-  Available: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  "On Trip": "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  "In Shop": "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  Retired: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-};
+import { useToast } from "../components/ui/Toast";
+import Button from "../components/ui/Button";
+import Table from "../components/ui/Table";
+import Modal from "../components/ui/Modal";
+import Alert from "../components/ui/Alert";
+import { StatusBadge } from "../components/ui/Badge";
+import { TextField, SelectField } from "../components/ui/FormField";
 
 const emptyForm = {
   registration_number: "",
@@ -20,9 +21,14 @@ const emptyForm = {
   status: "Available",
 };
 
+// Columns that are numeric under the hood, so sorting compares numbers
+// rather than lexicographically (e.g. "1500" wouldn't sort naturally as a string).
+const NUMERIC_COLUMNS = ["max_load_capacity_kg", "odometer", "acquisition_cost"];
+
 export default function Vehicles() {
   const role = localStorage.getItem("role");
   const canManageVehicles = canManage("vehicles", role);
+  const { showToast } = useToast();
 
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,8 +40,8 @@ export default function Vehicles() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState("");
 
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -43,11 +49,11 @@ export default function Vehicles() {
 
   const handleExportCsv = async () => {
     setExporting(true);
-    setExportError("");
     try {
       await downloadCsv("/export/vehicles", "vehicles.csv");
+      showToast("Vehicles exported to CSV");
     } catch (err) {
-      setExportError("Failed to export vehicles CSV");
+      showToast("Failed to export vehicles CSV", "error");
     } finally {
       setExporting(false);
     }
@@ -68,6 +74,7 @@ export default function Vehicles() {
 
   useEffect(() => {
     fetchVehicles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = vehicles.filter((v) => {
@@ -78,10 +85,6 @@ export default function Vehicles() {
     const matchesStatus = statusFilter === "All" || v.status === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
   });
-
-  // Columns that are numeric under the hood, so sorting compares numbers
-  // rather than lexicographically (e.g. "1500" wouldn't sort naturally as a string).
-  const NUMERIC_COLUMNS = ["max_load_capacity_kg", "odometer", "acquisition_cost"];
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
@@ -107,14 +110,10 @@ export default function Vehicles() {
     return 0;
   });
 
-  const sortArrow = (key) => {
-    if (sortConfig.key !== key) return "";
-    return sortConfig.direction === "asc" ? " ▲" : " ▼";
-  };
-
   const handleAddVehicle = async (e) => {
     e.preventDefault();
     setFormError("");
+    setSubmitting(true);
     try {
       await axios.post(
         `${API_URL}/vehicles`,
@@ -127,210 +126,188 @@ export default function Vehicles() {
       );
       setForm(emptyForm);
       setShowForm(false);
+      showToast(`${form.name || "Vehicle"} added to the registry`);
       fetchVehicles();
     } catch (err) {
       setFormError(err.response?.data?.detail || "Failed to add vehicle");
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const columns = [
+    { key: "registration_number", label: "Reg. No", sortable: true, numeric: true },
+    { key: "name", label: "Name / Model", sortable: true },
+    { key: "type", label: "Type", sortable: true },
+    {
+      key: "max_load_capacity_kg",
+      label: "Capacity",
+      sortable: true,
+      numeric: true,
+      render: (v) => `${v.max_load_capacity_kg} kg`,
+    },
+    {
+      key: "odometer",
+      label: "Odometer",
+      sortable: true,
+      numeric: true,
+      render: (v) => Number(v.odometer).toLocaleString(),
+    },
+    {
+      key: "acquisition_cost",
+      label: "Acq. Cost",
+      sortable: true,
+      numeric: true,
+      render: (v) => `₹${Number(v.acquisition_cost).toLocaleString()}`,
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      render: (v) => <StatusBadge status={v.status} />,
+    },
+  ];
+
   return (
-    <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Vehicle Registry</h1>
+    <div className="p-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
+        <div>
+          <h1 className="font-display text-xl font-bold text-ink-900 dark:text-paper-50">
+            Vehicle Registry
+          </h1>
+          <p className="text-sm text-ink-400 mt-0.5">
+            {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"} on record
+          </p>
+        </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleExportCsv}
-            disabled={exporting}
-            className="border border-gray-300 dark:border-neutral-700 px-4 py-2 rounded text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 disabled:opacity-40"
-          >
-            {exporting ? "Exporting..." : "Export CSV"}
-          </button>
+          <Button variant="secondary" icon={Download} loading={exporting} onClick={handleExportCsv}>
+            Export CSV
+          </Button>
           {canManageVehicles && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-accent text-black font-semibold px-4 py-2 rounded text-sm hover:opacity-90"
-            >
-              + Add Vehicle
-            </button>
+            <Button icon={Plus} onClick={() => setShowForm(true)}>
+              Add Vehicle
+            </Button>
           )}
         </div>
       </div>
 
-      {exportError && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-          {exportError}
-        </div>
-      )}
+      <Alert variant="error">{loadError}</Alert>
 
-      <div className="flex gap-3 mb-4">
-        <input
-          type="text"
-          placeholder="Search reg. no / name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm flex-1"
-        />
-        <select
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+          <input
+            type="text"
+            placeholder="Search reg. no / name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-md border border-ink-200 dark:border-ink-700 bg-paper-50 dark:bg-ink-950 pl-9 pr-3 py-2 text-sm text-ink-900 dark:text-ink-100 placeholder:text-ink-400 focus:border-signal-300 focus:ring-2 focus:ring-signal-300/30 outline-none"
+          />
+        </div>
+        <SelectField
+          wrapperClassName="mb-0 w-36"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
         >
           <option>All</option>
           <option>Van</option>
           <option>Truck</option>
           <option>Mini</option>
-        </select>
-        <select
+        </SelectField>
+        <SelectField
+          wrapperClassName="mb-0 w-40"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
         >
           <option>All</option>
           <option>Available</option>
           <option>On Trip</option>
           <option>In Shop</option>
           <option>Retired</option>
-        </select>
+        </SelectField>
       </div>
 
-      {loading && <p className="text-sm text-gray-400">Loading vehicles...</p>}
-      {loadError && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-          {loadError}
-        </div>
-      )}
+      <Table
+        columns={columns}
+        rows={sorted}
+        rowKey={(v) => v.id}
+        sortConfig={sortConfig}
+        onSort={handleSort}
+        loading={loading}
+        emptyTitle="No vehicles match your filters"
+        emptyDescription="Try clearing the search or filters above."
+      />
 
-      {!loading && !loadError && (
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="text-left border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("registration_number")}>
-                Reg. No (Unique){sortArrow("registration_number")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("name")}>
-                Name/Model{sortArrow("name")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("type")}>
-                Type{sortArrow("type")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("max_load_capacity_kg")}>
-                Capacity{sortArrow("max_load_capacity_kg")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("odometer")}>
-                Odometer{sortArrow("odometer")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("acquisition_cost")}>
-                Acq. Cost{sortArrow("acquisition_cost")}
-              </th>
-              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("status")}>
-                Status{sortArrow("status")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((v) => (
-              <tr key={v.id} className="border-b border-gray-100 dark:border-neutral-900">
-                <td className="py-2 pr-4">{v.registration_number}</td>
-                <td className="py-2 pr-4">{v.name}</td>
-                <td className="py-2 pr-4">{v.type}</td>
-                <td className="py-2 pr-4">{v.max_load_capacity_kg} kg</td>
-                <td className="py-2 pr-4">{Number(v.odometer).toLocaleString()}</td>
-                <td className="py-2 pr-4">₹{Number(v.acquisition_cost).toLocaleString()}</td>
-                <td className="py-2 pr-4">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[v.status]}`}>
-                    {v.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-6 text-center text-gray-400 dark:text-neutral-600">
-                  No vehicles match your filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
-
-      {showForm && canManageVehicles && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <form
-            onSubmit={handleAddVehicle}
-            className="bg-white dark:bg-neutral-900 rounded-lg p-6 w-96 shadow-xl"
-          >
-            <h2 className="text-lg font-bold mb-4">Add Vehicle</h2>
-
-            {formError && (
-              <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
-                {formError}
-              </div>
-            )}
-
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Registration Number</label>
-            <input
-              required
-              value={form.registration_number}
-              onChange={(e) => setForm({ ...form, registration_number: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
-
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Name / Model</label>
-            <input
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
-
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Type</label>
-            <select
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
+      <Modal
+        open={showForm && canManageVehicles}
+        onClose={() => {
+          setShowForm(false);
+          setFormError("");
+        }}
+        title="Add Vehicle"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowForm(false);
+                setFormError("");
+              }}
             >
-              <option>Van</option>
-              <option>Truck</option>
-              <option>Mini</option>
-            </select>
+              Cancel
+            </Button>
+            <Button type="submit" form="add-vehicle-form" loading={submitting}>
+              Add Vehicle
+            </Button>
+          </>
+        }
+      >
+        <form id="add-vehicle-form" onSubmit={handleAddVehicle}>
+          <Alert variant="error">{formError}</Alert>
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Max Load Capacity (kg)</label>
-            <input
-              required
-              type="number"
-              value={form.max_load_capacity_kg}
-              onChange={(e) => setForm({ ...form, max_load_capacity_kg: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-3"
-            />
+          <TextField
+            label="Registration Number"
+            required
+            value={form.registration_number}
+            onChange={(e) => setForm({ ...form, registration_number: e.target.value })}
+          />
 
-            <label className="block text-sm text-gray-600 dark:text-neutral-300 mb-1">Acquisition Cost</label>
-            <input
-              required
-              type="number"
-              value={form.acquisition_cost}
-              onChange={(e) => setForm({ ...form, acquisition_cost: e.target.value })}
-              className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded px-3 py-2 text-sm mb-4"
-            />
+          <TextField
+            label="Name / Model"
+            required
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
 
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => { setShowForm(false); setFormError(""); }}
-                className="px-4 py-2 rounded text-sm border border-gray-300 dark:border-neutral-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded text-sm bg-accent text-black font-semibold hover:opacity-90"
-              >
-                Add Vehicle
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          <SelectField
+            label="Type"
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+          >
+            <option>Van</option>
+            <option>Truck</option>
+            <option>Mini</option>
+          </SelectField>
+
+          <TextField
+            label="Max Load Capacity (kg)"
+            required
+            type="number"
+            value={form.max_load_capacity_kg}
+            onChange={(e) => setForm({ ...form, max_load_capacity_kg: e.target.value })}
+          />
+
+          <TextField
+            label="Acquisition Cost"
+            required
+            type="number"
+            value={form.acquisition_cost}
+            onChange={(e) => setForm({ ...form, acquisition_cost: e.target.value })}
+            wrapperClassName="mb-0"
+          />
+        </form>
+      </Modal>
     </div>
   );
 }

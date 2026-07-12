@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
+import Topbar from "./components/Topbar";
 import ProtectedRoute from "./ProtectedRoute";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -15,10 +17,15 @@ import { rolesForPage } from "./permissions";
 import "./App.css";
 
 function AppLayout({ children }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   return (
-    <div style={{ display: "flex" }}>
-      <Sidebar />
-      <div style={{ flex: 1 }}>{children}</div>
+    <div className="flex min-h-screen bg-paper-100 dark:bg-ink-950">
+      <Sidebar mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
+      <div className="flex-1 min-w-0 flex flex-col">
+        <Topbar onOpenMobileNav={() => setMobileNavOpen(true)} />
+        <main className="flex-1 min-w-0">{children}</main>
+      </div>
     </div>
   );
 }
@@ -78,7 +85,19 @@ function App() {
           </ProtectedRoute>
         } />
 
-        <Route path="/unauthorized" element={<div style={{ padding: 40 }}>You don't have access to this page.</div>} />
+        <Route
+          path="/unauthorized"
+          element={
+            <div className="min-h-screen flex items-center justify-center bg-paper-100 dark:bg-ink-950 text-ink-700 dark:text-ink-200 p-10 text-center">
+              <div>
+                <p className="font-display text-lg font-bold mb-1">Access restricted</p>
+                <p className="text-sm text-ink-400">
+                  Your role doesn't have permission to view this page.
+                </p>
+              </div>
+            </div>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
