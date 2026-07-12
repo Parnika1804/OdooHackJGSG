@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
+import ProtectedRoute from "./ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Vehicles from "./pages/Vehicles";
@@ -25,14 +26,56 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login />} />
-        <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-        <Route path="/vehicles" element={<AppLayout><Vehicles /></AppLayout>} />
-        <Route path="/drivers" element={<AppLayout><Drivers /></AppLayout>} />
-        <Route path="/trips" element={<AppLayout><Trips /></AppLayout>} />
-        <Route path="/maintenance" element={<AppLayout><Maintenance /></AppLayout>} />
-        <Route path="/fuel-expenses" element={<AppLayout><FuelExpenses /></AppLayout>} />
-        <Route path="/analytics" element={<AppLayout><Analytics /></AppLayout>} />
-        <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
+
+        <Route path="/dashboard" element={
+          <ProtectedRoute allowedRoles={["Fleet Manager", "Dispatcher", "Safety Officer", "Financial Analyst"]}>
+            <AppLayout><Dashboard /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/vehicles" element={
+          <ProtectedRoute allowedRoles={["Fleet Manager"]}>
+            <AppLayout><Vehicles /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/drivers" element={
+          <ProtectedRoute allowedRoles={["Fleet Manager", "Safety Officer"]}>
+            <AppLayout><Drivers /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/trips" element={
+          <ProtectedRoute allowedRoles={["Fleet Manager", "Dispatcher"]}>
+            <AppLayout><Trips /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/maintenance" element={
+          <ProtectedRoute allowedRoles={["Fleet Manager"]}>
+            <AppLayout><Maintenance /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/fuel-expenses" element={
+          <ProtectedRoute allowedRoles={["Financial Analyst", "Fleet Manager"]}>
+            <AppLayout><FuelExpenses /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/analytics" element={
+          <ProtectedRoute allowedRoles={["Financial Analyst"]}>
+            <AppLayout><Analytics /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/settings" element={
+          <ProtectedRoute allowedRoles={["Fleet Manager"]}>
+            <AppLayout><Settings /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/unauthorized" element={<div style={{ padding: 40 }}>You don't have access to this page.</div>} />
       </Routes>
     </BrowserRouter>
   );
