@@ -20,6 +20,9 @@ const emptyForm = {
 const API_URL = "http://localhost:8000";
 
 export default function Vehicles() {
+  const role = localStorage.getItem("role");
+  const canManageVehicles = role === "Fleet Manager";
+
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -85,12 +88,14 @@ export default function Vehicles() {
     <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-bold">Vehicle Registry</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-accent text-black font-semibold px-4 py-2 rounded text-sm hover:opacity-90"
-        >
-          + Add Vehicle
-        </button>
+        {canManageVehicles && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-accent text-black font-semibold px-4 py-2 rounded text-sm hover:opacity-90"
+          >
+            + Add Vehicle
+          </button>
+        )}
       </div>
 
       <div className="flex gap-3 mb-4">
@@ -171,7 +176,7 @@ export default function Vehicles() {
         </table>
       )}
 
-      {showForm && (
+      {showForm && canManageVehicles && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <form
             onSubmit={handleAddVehicle}
