@@ -1,22 +1,34 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { Truck, CheckCircle2, Wrench, Route, Clock, Users, Gauge } from "lucide-react";
 import { API_URL } from "../config";
-
-const statusStyles = {
-  Draft: "bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300",
-  Dispatched: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  Completed: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  Cancelled: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-};
-
-const vehicleStatusBarColors = {
-  Available: "bg-green-500",
-  "On Trip": "bg-blue-500",
-  "In Shop": "bg-amber-500",
-  Retired: "bg-red-500",
-};
+import { toneForStatus } from "../statusTones";
+import Card from "../components/ui/Card";
+import Table from "../components/ui/Table";
+import Alert from "../components/ui/Alert";
+import Skeleton from "../components/ui/Skeleton";
+import { StatusBadge } from "../components/ui/Badge";
+import { SelectField } from "../components/ui/FormField";
 
 const VEHICLE_STATUSES = ["Available", "On Trip", "In Shop", "Retired"];
+
+const BAR_TONE_CLASSES = {
+  success: "bg-success-400",
+  transit: "bg-transit-400",
+  signal: "bg-signal-300",
+  alert: "bg-alert-400",
+  neutral: "bg-ink-300 dark:bg-ink-600",
+};
+
+const KPI_META = {
+  "Active Vehicles": { icon: Truck, tone: "text-transit-500 bg-transit-400/10" },
+  "Available Vehicles": { icon: CheckCircle2, tone: "text-success-600 bg-success-500/10" },
+  "Vehicles in Maintenance": { icon: Wrench, tone: "text-signal-600 bg-signal-300/15" },
+  "Active Trips": { icon: Route, tone: "text-transit-500 bg-transit-400/10" },
+  "Pending Trips": { icon: Clock, tone: "text-ink-500 bg-ink-100 dark:bg-ink-800" },
+  "Drivers on Duty": { icon: Users, tone: "text-transit-500 bg-transit-400/10" },
+  "Fleet Utilization": { icon: Gauge, tone: "text-signal-600 bg-signal-300/15" },
+};
 
 export default function Dashboard() {
   const [kpis, setKpis] = useState(null);
@@ -68,6 +80,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchVehicles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -103,132 +116,138 @@ export default function Dashboard() {
       ]
     : [];
 
-  return (
-    <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
-      <h1 className="text-xl font-bold mb-4">Dashboard</h1>
+  const tripColumns = [
+    {
+      key: "trip",
+      label: "Trip",
+      numeric: true,
+      render: (t) => `TR${String(t.id).padStart(3, "0")}`,
+    },
+    { key: "vehicle_name", label: "Vehicle", render: (t) => t.vehicle_name || "--" },
+    { key: "driver_name", label: "Driver", render: (t) => t.driver_name || "--" },
+    { key: "status", label: "Status", render: (t) => <StatusBadge status={t.status} /> },
+  ];
 
-      {/* Filters */}
-      <div className="flex gap-3 mb-5">
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
-        >
-          <option>All</option>
-          {vehicleTypes.map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
-        >
-          <option>All</option>
-          {VEHICLE_STATUSES.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        <select
-          value={regionFilter}
-          onChange={(e) => setRegionFilter(e.target.value)}
-          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
-        >
-          <option>All</option>
-          {regions.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
+  return (
+    <div className="p-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
+        <h1 className="font-display text-xl font-bold text-ink-900 dark:text-paper-50">
+          Dashboard
+        </h1>
+        <div className="flex flex-wrap gap-2">
+          <SelectField
+            wrapperClassName="mb-0 w-32"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option>All</option>
+            {vehicleTypes.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </SelectField>
+          <SelectField
+            wrapperClassName="mb-0 w-36"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option>All</option>
+            {VEHICLE_STATUSES.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </SelectField>
+          <SelectField
+            wrapperClassName="mb-0 w-32"
+            value={regionFilter}
+            onChange={(e) => setRegionFilter(e.target.value)}
+          >
+            <option>All</option>
+            {regions.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </SelectField>
+        </div>
       </div>
 
-      {loadError && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-4">
-          {loadError}
-        </div>
-      )}
+      <Alert variant="error">{loadError}</Alert>
 
-      {loading && <p className="text-sm text-gray-400">Loading dashboard...</p>}
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+        {loading &&
+          Array.from({ length: 7 }).map((_, i) => (
+            <Card key={i} className="p-3">
+              <Skeleton className="h-3 w-16 mb-3" />
+              <Skeleton className="h-6 w-10" />
+            </Card>
+          ))}
+
+        {!loading &&
+          kpiCards.map((card) => {
+            const meta = KPI_META[card.label] || {};
+            const Icon = meta.icon;
+            return (
+              <Card
+                key={card.label}
+                className={`p-3 ${card.highlight ? "border-signal-300 dark:border-signal-300/60" : ""}`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-ink-400 leading-tight">{card.label}</span>
+                  {Icon && (
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${meta.tone}`}>
+                      <Icon size={13} />
+                    </span>
+                  )}
+                </div>
+                <div className="font-data text-2xl font-bold text-ink-900 dark:text-paper-50">
+                  {card.value}
+                </div>
+              </Card>
+            );
+          })}
+      </div>
 
       {!loading && kpis && (
-        <>
-          {/* KPI cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-            {kpiCards.map((card) => (
-              <div
-                key={card.label}
-                className={`border rounded-lg p-3 ${
-                  card.highlight
-                    ? "border-accent bg-accent/10"
-                    : "border-gray-200 dark:border-neutral-800"
-                }`}
-              >
-                <div className="text-xs text-gray-500 dark:text-neutral-400 mb-1">{card.label}</div>
-                <div className="text-2xl font-bold">{card.value}</div>
-              </div>
-            ))}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent trips */}
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400 mb-3">
+              Recent Trips
+            </h2>
+            <Table
+              columns={tripColumns}
+              rows={kpis.recent_trips}
+              rowKey={(t) => t.id}
+              emptyTitle="No trips yet"
+              emptyDescription="Dispatched trips will show up here."
+            />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Recent trips */}
-            <div>
-              <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-3">
-                RECENT TRIPS
-              </h2>
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="text-left border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
-                    <th className="py-2 pr-4">Trip</th>
-                    <th className="py-2 pr-4">Vehicle</th>
-                    <th className="py-2 pr-4">Driver</th>
-                    <th className="py-2 pr-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {kpis.recent_trips.map((t) => (
-                    <tr key={t.id} className="border-b border-gray-100 dark:border-neutral-900">
-                      <td className="py-2 pr-4">TR{String(t.id).padStart(3, "0")}</td>
-                      <td className="py-2 pr-4">{t.vehicle_name || "--"}</td>
-                      <td className="py-2 pr-4">{t.driver_name || "--"}</td>
-                      <td className="py-2 pr-4">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[t.status]}`}>
-                          {t.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {kpis.recent_trips.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-6 text-center text-gray-400 dark:text-neutral-600">
-                        No trips yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Vehicle status bar */}
-            <div>
-              <h2 className="text-sm font-semibold text-gray-500 dark:text-neutral-400 mb-3">
-                VEHICLE STATUS
-              </h2>
-              <div className="space-y-3">
+          {/* Vehicle status bar */}
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400 mb-3">
+              Vehicle Status
+            </h2>
+            <Card>
+              <div className="space-y-4">
                 {statusCounts.map(({ status, count }) => (
                   <div key={status} className="flex items-center gap-3">
-                    <span className="text-xs w-20 text-gray-500 dark:text-neutral-400">{status}</span>
-                    <div className="flex-1 h-3 bg-neutral-100 dark:bg-neutral-900 rounded overflow-hidden">
+                    <span className="text-xs w-20 shrink-0 text-ink-500 dark:text-ink-400">
+                      {status}
+                    </span>
+                    <div className="flex-1 h-2.5 bg-paper-100 dark:bg-ink-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${vehicleStatusBarColors[status]}`}
+                        className={`h-full rounded-full transition-all duration-300 ${BAR_TONE_CLASSES[toneForStatus(status)]}`}
                         style={{ width: `${(count / totalForBar) * 100}%` }}
                       />
                     </div>
-                    <span className="text-xs w-6 text-right">{count}</span>
+                    <span className="font-data text-xs w-6 text-right text-ink-600 dark:text-ink-300">
+                      {count}
+                    </span>
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
