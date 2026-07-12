@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from auth import router as auth_router
 from vehicles import router as vehicles_router
+from drivers import router as drivers_router
 app = FastAPI(title="TransitOps API")
 
 # CORS setup first
@@ -16,7 +17,7 @@ app.add_middleware(
 # Routers after
 app.include_router(auth_router)
 app.include_router(vehicles_router)
-
+app.include_router(drivers_router)
 @app.get("/")
 def read_root():
     return {"message": "TransitOps API is running"}
