@@ -31,6 +31,9 @@ export default function Drivers() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
@@ -70,11 +73,45 @@ export default function Drivers() {
     fetchDrivers();
   }, []);
 
-  const filtered = drivers.filter(
-    (d) =>
+  const filtered = drivers.filter((d) => {
+    const matchesSearch =
       d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.license_number.toLowerCase().includes(search.toLowerCase())
-  );
+      d.license_number.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "All" || d.status === statusFilter;
+    const matchesCategory = categoryFilter === "All" || d.license_category === categoryFilter;
+    return matchesSearch && matchesStatus && matchesCategory;
+  });
+
+  const NUMERIC_COLUMNS = ["safety_score"];
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return { key: null, direction: "asc" };
+    });
+  };
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    let valA = a[sortConfig.key];
+    let valB = b[sortConfig.key];
+    if (NUMERIC_COLUMNS.includes(sortConfig.key)) {
+      valA = Number(valA);
+      valB = Number(valB);
+    } else if (typeof valA === "string") {
+      valA = valA.toLowerCase();
+      valB = valB.toLowerCase();
+    }
+    if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
+    if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const sortArrow = (key) => {
+    if (sortConfig.key !== key) return "";
+    return sortConfig.direction === "asc" ? " ▲" : " ▼";
+  };
 
   const handleAddDriver = async (e) => {
     e.preventDefault();
@@ -125,13 +162,35 @@ export default function Drivers() {
         </div>
       )}
 
-      <input
-        type="text"
-        placeholder="Search name / license..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm mb-4 w-72"
-      />
+      <div className="flex gap-3 mb-4">
+        <input
+          type="text"
+          placeholder="Search name / license..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm flex-1"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
+        >
+          <option>All</option>
+          <option>Available</option>
+          <option>On Trip</option>
+          <option>Off Duty</option>
+          <option>Suspended</option>
+        </select>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded px-3 py-1.5 text-sm"
+        >
+          <option>All</option>
+          <option>LMV</option>
+          <option>HMV</option>
+        </select>
+      </div>
 
       {loading && <p className="text-sm text-gray-400">Loading drivers...</p>}
       {loadError && (
@@ -144,17 +203,29 @@ export default function Drivers() {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="text-left border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
-              <th className="py-2 pr-4">Driver</th>
-              <th className="py-2 pr-4">License No.</th>
-              <th className="py-2 pr-4">Category</th>
-              <th className="py-2 pr-4">Expiry</th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("name")}>
+                Driver{sortArrow("name")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("license_number")}>
+                License No.{sortArrow("license_number")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("license_category")}>
+                Category{sortArrow("license_category")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("license_expiry_date")}>
+                Expiry{sortArrow("license_expiry_date")}
+              </th>
               <th className="py-2 pr-4">Contact</th>
-              <th className="py-2 pr-4">Safety</th>
-              <th className="py-2 pr-4">Status</th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("safety_score")}>
+                Safety{sortArrow("safety_score")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("status")}>
+                Status{sortArrow("status")}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((d) => (
+            {sorted.map((d) => (
               <tr key={d.id} className="border-b border-gray-100 dark:border-neutral-900">
                 <td className="py-2 pr-4">{d.name}</td>
                 <td className="py-2 pr-4">{d.license_number}</td>
@@ -172,7 +243,7 @@ export default function Drivers() {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {sorted.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-6 text-center text-gray-400 dark:text-neutral-600">
                   No drivers match your search.

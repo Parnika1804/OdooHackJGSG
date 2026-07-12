@@ -30,6 +30,7 @@ export default function Vehicles() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
@@ -77,6 +78,39 @@ export default function Vehicles() {
     const matchesStatus = statusFilter === "All" || v.status === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
   });
+
+  // Columns that are numeric under the hood, so sorting compares numbers
+  // rather than lexicographically (e.g. "1500" wouldn't sort naturally as a string).
+  const NUMERIC_COLUMNS = ["max_load_capacity_kg", "odometer", "acquisition_cost"];
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return { key: null, direction: "asc" };
+    });
+  };
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    let valA = a[sortConfig.key];
+    let valB = b[sortConfig.key];
+    if (NUMERIC_COLUMNS.includes(sortConfig.key)) {
+      valA = Number(valA);
+      valB = Number(valB);
+    } else if (typeof valA === "string") {
+      valA = valA.toLowerCase();
+      valB = valB.toLowerCase();
+    }
+    if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
+    if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const sortArrow = (key) => {
+    if (sortConfig.key !== key) return "";
+    return sortConfig.direction === "asc" ? " ▲" : " ▼";
+  };
 
   const handleAddVehicle = async (e) => {
     e.preventDefault();
@@ -170,17 +204,31 @@ export default function Vehicles() {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="text-left border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400">
-              <th className="py-2 pr-4">Reg. No (Unique)</th>
-              <th className="py-2 pr-4">Name/Model</th>
-              <th className="py-2 pr-4">Type</th>
-              <th className="py-2 pr-4">Capacity</th>
-              <th className="py-2 pr-4">Odometer</th>
-              <th className="py-2 pr-4">Acq. Cost</th>
-              <th className="py-2 pr-4">Status</th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("registration_number")}>
+                Reg. No (Unique){sortArrow("registration_number")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("name")}>
+                Name/Model{sortArrow("name")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("type")}>
+                Type{sortArrow("type")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("max_load_capacity_kg")}>
+                Capacity{sortArrow("max_load_capacity_kg")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("odometer")}>
+                Odometer{sortArrow("odometer")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("acquisition_cost")}>
+                Acq. Cost{sortArrow("acquisition_cost")}
+              </th>
+              <th className="py-2 pr-4 cursor-pointer select-none" onClick={() => handleSort("status")}>
+                Status{sortArrow("status")}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((v) => (
+            {sorted.map((v) => (
               <tr key={v.id} className="border-b border-gray-100 dark:border-neutral-900">
                 <td className="py-2 pr-4">{v.registration_number}</td>
                 <td className="py-2 pr-4">{v.name}</td>
@@ -195,7 +243,7 @@ export default function Vehicles() {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {sorted.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-6 text-center text-gray-400 dark:text-neutral-600">
                   No vehicles match your filters.
