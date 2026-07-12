@@ -1,17 +1,39 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
-const roles = ["Dispatcher", "Fleet Manager", "Safety Officer", "Financial Analyst"];
+const roleRoutes = {
+  "Fleet Manager": "/vehicles",
+  "Dispatcher": "/dashboard",
+  "Safety Officer": "/drivers",
+  "Financial Analyst": "/fuel-expenses",
+};
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState(roles[0]);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log({ email, password, role, rememberMe });
+    setError("");
+    try {
+      const res = await axios.post("http://localhost:8000/login", {
+        email,
+        password,
+      });
+
+      const { access_token, user } = res.data;
+      localStorage.setItem("token", access_token);
+      localStorage.setItem("role", user.role);
+      localStorage.setItem("name", user.name);
+
+      navigate(roleRoutes[user.role] || "/dashboard");
+    } catch (err) {
+      setError(err.response?.data?.detail || "Invalid email or password");
+    }
   };
 
   return (
@@ -88,19 +110,6 @@ export default function Login() {
             required
             className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 rounded px-3 py-2 text-sm"
           />
-
-          <label className="block text-sm text-gray-600 dark:text-neutral-300 mt-3 mb-1">
-            Role (RBAC)
-          </label>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="w-full border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 rounded px-3 py-2 text-sm"
-          >
-            {roles.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
 
           <div className="flex justify-between items-center mt-4 text-sm">
             <label className="flex items-center gap-2 text-gray-600 dark:text-neutral-300">
