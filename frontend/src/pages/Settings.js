@@ -1,5 +1,4 @@
 import { useState } from "react";
-import ThemeToggle from "../theme/ThemeToggle";
 
 const initialPermissions = [
   { role: "Fleet Manager", fleet: "✓", drivers: "✓", trips: "—", fuelExp: "—", analytics: "—" },
@@ -88,13 +87,6 @@ export default function Settings() {
               </p>
             )}
           </form>
-
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-neutral-800">
-            <h2 className="font-semibold text-sm text-gray-500 dark:text-neutral-400 uppercase mb-3">
-              Appearance
-            </h2>
-            <ThemeToggle />
-          </div>
         </div>
 
         {/* Role-permission matrix */}
