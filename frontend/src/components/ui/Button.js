@@ -5,6 +5,7 @@ const VARIANT_CLASSES = {
     "bg-signal-300 text-ink-950 hover:bg-signal-400 disabled:hover:bg-signal-300 shadow-xs",
   secondary:
     "border border-ink-200 dark:border-ink-700 bg-paper-50 dark:bg-ink-900 text-ink-700 dark:text-ink-200 hover:border-signal-300 dark:hover:border-signal-300 hover:text-signal-600 dark:hover:text-signal-300",
+  success: "bg-success-500 text-white hover:bg-success-600 disabled:hover:bg-success-500",
   danger: "bg-alert-500 text-white hover:bg-alert-600 disabled:hover:bg-alert-500",
   ghost:
     "text-ink-500 dark:text-ink-300 hover:bg-paper-100 dark:hover:bg-ink-900 hover:text-ink-800 dark:hover:text-ink-100",
