@@ -8,6 +8,7 @@ from maintenance import router as maintenance_router
 from fuel_expenses import router as fuel_expenses_router
 from dashboard import router as dashboard_router
 from analytics import router as analytics_router
+from export import router as export_router
 app = FastAPI(title="TransitOps API")
 
 # CORS setup first
@@ -28,6 +29,7 @@ app.include_router(maintenance_router)
 app.include_router(fuel_expenses_router)
 app.include_router(dashboard_router)
 app.include_router(analytics_router)
+app.include_router(export_router)
 @app.get("/")
 def read_root():
     return {"message": "TransitOps API is running"}
