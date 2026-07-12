@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_URL } from "../config";
 import { canManage } from "../permissions";
+import { downloadCsv } from "../utils/exportCsv";
 
 const statusStyles = {
   Available: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
@@ -32,10 +33,24 @@ export default function Vehicles() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
   });
+
+  const handleExportCsv = async () => {
+    setExporting(true);
+    setExportError("");
+    try {
+      await downloadCsv("/export/vehicles", "vehicles.csv");
+    } catch (err) {
+      setExportError("Failed to export vehicles CSV");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fetchVehicles = async () => {
     setLoading(true);
@@ -88,15 +103,30 @@ export default function Vehicles() {
     <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-bold">Vehicle Registry</h1>
-        {canManageVehicles && (
+        <div className="flex gap-2">
           <button
-            onClick={() => setShowForm(true)}
-            className="bg-accent text-black font-semibold px-4 py-2 rounded text-sm hover:opacity-90"
+            onClick={handleExportCsv}
+            disabled={exporting}
+            className="border border-gray-300 dark:border-neutral-700 px-4 py-2 rounded text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 disabled:opacity-40"
           >
-            + Add Vehicle
+            {exporting ? "Exporting..." : "Export CSV"}
           </button>
-        )}
+          {canManageVehicles && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="bg-accent text-black font-semibold px-4 py-2 rounded text-sm hover:opacity-90"
+            >
+              + Add Vehicle
+            </button>
+          )}
+        </div>
       </div>
+
+      {exportError && (
+        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
+          {exportError}
+        </div>
+      )}
 
       <div className="flex gap-3 mb-4">
         <input

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_URL } from "../config";
 import { canManage } from "../permissions";
+import { downloadCsv } from "../utils/exportCsv";
 
 const LIFECYCLE_STEPS = ["Draft", "Dispatched", "Completed", "Cancelled"];
 
@@ -36,6 +37,8 @@ export default function Trips() {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
@@ -52,6 +55,18 @@ export default function Trips() {
   const authHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
   });
+
+  const handleExportCsv = async () => {
+    setExporting(true);
+    setExportError("");
+    try {
+      await downloadCsv("/export/trips", "trips.csv");
+    } catch (err) {
+      setExportError("Failed to export trips CSV");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -196,10 +211,25 @@ export default function Trips() {
 
   return (
     <div className="p-6 bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 min-h-screen">
-      <h1 className="text-xl font-bold mb-1">Trip Dispatcher</h1>
+      <div className="flex justify-between items-center mb-1">
+        <h1 className="text-xl font-bold">Trip Dispatcher</h1>
+        <button
+          onClick={handleExportCsv}
+          disabled={exporting}
+          className="border border-gray-300 dark:border-neutral-700 px-4 py-2 rounded text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 disabled:opacity-40"
+        >
+          {exporting ? "Exporting..." : "Export CSV"}
+        </button>
+      </div>
       <p className="text-xs text-gray-400 dark:text-neutral-600 mb-5">
         Live trip data from the API.
       </p>
+
+      {exportError && (
+        <div className="bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded mb-3">
+          {exportError}
+        </div>
+      )}
 
       {/* Trip lifecycle stepper */}
       <div className="flex items-center gap-2 mb-8 max-w-xl">
