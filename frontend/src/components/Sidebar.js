@@ -162,7 +162,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
   return (
     <>
       {/* Desktop */}
-      <div className="hidden md:block shrink-0">{content}</div>
+      <div className="hidden md:block shrink-0 sticky top-0 h-screen">{content}</div>
 
       {/* Mobile drawer */}
       {mobileOpen && (
