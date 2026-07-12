@@ -6,6 +6,7 @@ from drivers import router as drivers_router
 from trips import router as trips_router
 from maintenance import router as maintenance_router
 from fuel_expenses import router as fuel_expenses_router
+from dashboard import router as dashboard_router
 app = FastAPI(title="TransitOps API")
 
 # CORS setup first
@@ -24,6 +25,7 @@ app.include_router(drivers_router)
 app.include_router(trips_router)
 app.include_router(maintenance_router)
 app.include_router(fuel_expenses_router)
+app.include_router(dashboard_router)
 @app.get("/")
 def read_root():
     return {"message": "TransitOps API is running"}
