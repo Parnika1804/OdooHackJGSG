@@ -1,16 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from auth import router as auth_router
 
 app = FastAPI(title="TransitOps API")
 
-# Allow frontend (React dev server) to call this backend
+# CORS setup first
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React default dev port
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Routers after
+app.include_router(auth_router)
 
 
 @app.get("/")
