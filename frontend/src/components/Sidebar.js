@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ChevronsLeft, ChevronsRight, Train } from "lucide-react";
 import { canAccess } from "../permissions";
@@ -20,6 +20,8 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === "1"
   );
+  const drawerRef = useRef(null);
+  const openerRef = useRef(null);
 
   const visibleItems = navItems.filter((item) => canAccess(item.permKey, role));
   const activeIndex = visibleItems.findIndex((item) => item.path === location.pathname);
@@ -30,6 +32,50 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
       return !c;
     });
   };
+
+  // Mobile drawer: trap focus inside while open, close on Escape, and
+  // return focus to whatever triggered it (the Topbar hamburger) on close.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    openerRef.current = document.activeElement;
+
+    const getFocusable = () =>
+      drawerRef.current
+        ? Array.from(
+            drawerRef.current.querySelectorAll(
+              'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          )
+        : [];
+
+    getFocusable()[0]?.focus();
+
+    const handleKey = (e) => {
+      if (e.key === "Escape") {
+        onCloseMobile?.();
+        return;
+      }
+      if (e.key === "Tab") {
+        const focusable = getFocusable();
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      openerRef.current?.focus?.();
+    };
+  }, [mobileOpen, onCloseMobile]);
 
   const content = (
     <div
@@ -50,7 +96,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
       </div>
 
       {/* Route / nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-2">
+      <nav aria-label="Primary navigation" className="flex-1 overflow-y-auto py-4 px-2">
         <ul className="relative">
           {visibleItems.map((item, i) => {
             const isActive = i === activeIndex;
@@ -103,6 +149,8 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
       <button
         type="button"
         onClick={toggleCollapsed}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         className="hidden md:flex items-center gap-2 mx-2 mb-3 px-2.5 py-2 rounded-md text-xs font-medium text-ink-400 hover:text-ink-700 dark:hover:text-ink-100 hover:bg-paper-100 dark:hover:bg-ink-900 transition-colors"
       >
         {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
@@ -124,7 +172,15 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
             onClick={onCloseMobile}
             aria-hidden
           />
-          <div className="absolute inset-y-0 left-0 shadow-popover">{content}</div>
+          <div
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
+            className="absolute inset-y-0 left-0 shadow-popover"
+          >
+            {content}
+          </div>
         </div>
       )}
     </>

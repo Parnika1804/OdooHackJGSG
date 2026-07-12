@@ -22,13 +22,24 @@ function AppLayout({ children }) {
 
   return (
     <div className="flex min-h-screen bg-paper-100 dark:bg-ink-950">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:z-50 focus:top-3 focus:left-3 focus:rounded-md focus:bg-signal-300 focus:text-ink-950 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold"
+      >
+        Skip to main content
+      </a>
       <Sidebar mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
       <div className="flex-1 min-w-0 flex flex-col">
         <Topbar onOpenMobileNav={() => setMobileNavOpen(true)} />
         {/* Keying on pathname remounts this wrapper on every navigation, which
             restarts the fade/slide-up animation — a lightweight page
             transition without pulling in a routing-transition library. */}
-        <main key={location.pathname} className="flex-1 min-w-0 animate-page-in">
+        <main
+          id="main-content"
+          key={location.pathname}
+          tabIndex={-1}
+          className="flex-1 min-w-0 animate-page-in outline-none"
+        >
           {children}
         </main>
       </div>

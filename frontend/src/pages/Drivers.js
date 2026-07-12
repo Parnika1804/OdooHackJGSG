@@ -282,8 +282,12 @@ export default function Drivers() {
         sortConfig={sortConfig}
         onSort={handleSort}
         loading={loading}
-        emptyTitle="No drivers match your filters"
-        emptyDescription="Try clearing the search or filters above."
+        emptyTitle={drivers.length === 0 ? "No drivers yet" : "No drivers match your filters"}
+        emptyDescription={
+          drivers.length === 0
+            ? "Drivers you add to the roster will appear here."
+            : "Try clearing the search or filters above."
+        }
       />
 
       <div className="flex items-start gap-2 mt-3 text-xs text-ink-400">

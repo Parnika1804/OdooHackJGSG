@@ -13,6 +13,7 @@ export default function Topbar({ onOpenMobileNav }) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  const menuButtonRef = useRef(null);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -23,6 +24,18 @@ export default function Topbar({ onOpenMobileNav }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleKey = (e) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [menuOpen]);
 
   const pageLabel = labelForPath(location.pathname) || "TransitOps";
 
@@ -53,13 +66,18 @@ export default function Topbar({ onOpenMobileNav }) {
       </div>
 
       {/* Search */}
-      <div className="hidden sm:flex flex-1 max-w-sm ml-4">
+      <div role="search" className="hidden sm:flex flex-1 max-w-sm ml-4">
         <div className="relative w-full">
           <Search
             size={15}
+            aria-hidden
             className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
           />
+          <label htmlFor="global-search" className="sr-only">
+            Search vehicles, trips, drivers
+          </label>
           <input
+            id="global-search"
             type="text"
             placeholder="Search vehicles, trips, drivers..."
             className="w-full rounded-md border border-ink-100 dark:border-ink-700 bg-paper-100 dark:bg-ink-900 pl-9 pr-3 py-2 text-sm text-ink-800 dark:text-ink-100 placeholder:text-ink-400 focus:bg-paper-50 dark:focus:bg-ink-950 outline-none"
@@ -92,8 +110,12 @@ export default function Topbar({ onOpenMobileNav }) {
       {/* User menu */}
       <div className="relative" ref={menuRef}>
         <button
+          ref={menuButtonRef}
           type="button"
           onClick={() => setMenuOpen((o) => !o)}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label={`User menu, ${name || "User"}`}
           className="flex items-center gap-2 rounded-md pl-1.5 pr-2 py-1.5 hover:bg-paper-100 dark:hover:bg-ink-900 transition-colors"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink-800 dark:bg-ink-100 text-paper-50 dark:text-ink-900 text-xs font-semibold font-data">
@@ -109,7 +131,11 @@ export default function Topbar({ onOpenMobileNav }) {
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 mt-2 w-48 rounded-md border border-ink-100 dark:border-ink-700 bg-paper-50 dark:bg-ink-900 shadow-popover py-1 origin-top-right animate-drop-in">
+          <div
+            role="menu"
+            aria-label="User menu"
+            className="absolute right-0 mt-2 w-48 rounded-md border border-ink-100 dark:border-ink-700 bg-paper-50 dark:bg-ink-900 shadow-popover py-1 origin-top-right animate-drop-in"
+          >
             <div className="px-3 py-2 border-b border-ink-100 dark:border-ink-800 md:hidden">
               <div className="text-sm font-semibold text-ink-800 dark:text-ink-100">
                 {name || "User"}
@@ -118,6 +144,7 @@ export default function Topbar({ onOpenMobileNav }) {
             </div>
             <button
               type="button"
+              role="menuitem"
               onClick={handleLogout}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-alert-500 hover:bg-alert-50 dark:hover:bg-ink-800"
             >

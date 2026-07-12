@@ -254,8 +254,12 @@ export default function Vehicles() {
         sortConfig={sortConfig}
         onSort={handleSort}
         loading={loading}
-        emptyTitle="No vehicles match your filters"
-        emptyDescription="Try clearing the search or filters above."
+        emptyTitle={vehicles.length === 0 ? "No vehicles yet" : "No vehicles match your filters"}
+        emptyDescription={
+          vehicles.length === 0
+            ? "Vehicles you add to the fleet will appear here."
+            : "Try clearing the search or filters above."
+        }
       />
 
       <Modal
